@@ -17,60 +17,41 @@ int line = 1;
 		  }     { outro comentário depois do comentário prévio }
 	  blah blah blah
 	end;
+
+	Bug corrigido: a tentativa anterior de tratar EOF (comentário sem '}')
+	introduzia um getc() extra após \{ / \}, o que podia consumir o '}'
+	real de fechamento. Agora cada caractere é lido uma vez; '\' apenas
+	"escapa" o próximo (incluindo '{' e '}'); EOF encerra com diagnóstico.
  */
-/*
 void skipcomments(FILE *tape)
 {
 	int head;
-	while(1) {
+	int startline;
+
+	while (1) {
 		skipspaces(tape);
-		if ( (head = getc(tape)) == '{') {
-			while( (head = getc(tape)) != '}') {
-				if (head == '\\') {
-					if ( (head = getc(tape)) == '{' || head == '}')
-						head = getc(tape);
-				}
-				if (head == '\n') {
-					line++;
-				}
-				if ( head == EOF ) {
-					fprintf(stderr, "unclosed comment at line %d\n", line);
-					exit(-4);
-				}
-			}
-		} else {
-			ungetc(head, tape);
+		if ((head = getc(tape)) != '{') {
+			if (head != EOF)
+				ungetc(head, tape);
 			break;
 		}
-	}
-}
-*/
 
-void skipcomments(FILE *tape)
-{
-	int head;
-	_skpspc:
-	skipspaces(tape);
-	if ( (head = getc(tape)) == '{') {
-		while( (head = getc(tape)) != '}') {
-
+		startline = line;
+		while ((head = getc(tape)) != '}') {
 			if (head == '\\') {
-				if ( (head = getc(tape)) == '{' || head == '}')
-					head = getc(tape);
+				/* \{ e \} entram no texto; não fecham o comentário */
+				head = getc(tape);
 			}
 
-			if (head == '\n') {
+			if (head == '\n')
 				line++;
-			}
 
-			if ( head == EOF ) {
-				fprintf(stderr, "unclosed comment at line %d\n", line);
+			if (head == EOF) {
+				fprintf(stderr, "unclosed comment at line %d\n", startline);
 				exit(-4);
 			}
 		}
-		goto _skpspc;
 	}
-	ungetc(head, tape);
 }
 
 void skipspaces(FILE *tape)
