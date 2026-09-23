@@ -1,5 +1,7 @@
 CFLAGS = -I. -g
 
+EXEC = mybc
+
 mybc: main.o lexer.o parser.o
 	$(CC) -o $@ $^
 
