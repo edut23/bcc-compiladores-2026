@@ -28,13 +28,13 @@ void E(void)
 	if (lookahead == '+' || lookahead == '-') {
 		match(lookahead);
 	}
-
+_T:
 	T();
 
 	// {oplus T}
-	while (lookahead == '+' || lookahead == '-') {
+	if (lookahead == '+' || lookahead == '-') {
 		match(lookahead);
-		T();
+		goto _T;
 	}
 
 }
@@ -42,11 +42,13 @@ void E(void)
 //  T -> F Q
 void T(void)
 {
+_F:
 	F();
 
 	// {otimes F}
-	while (lookahead == '*' || lookahead == '/') {
-		match(lookahead); F();
+	if (lookahead == '*' || lookahead == '/') {
+		match(lookahead); 
+		goto _F;
 	}
 }
 

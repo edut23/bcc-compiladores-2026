@@ -125,7 +125,7 @@ int isOCT(FILE *tape)
 // HEX = 0[xX][0-9A-Fa-f]+
 int isHEX(FILE *tape)
 {
-	char hexpref[2];
+	int hexpref[2];
 	if ( (hexpref[0] = getc(tape)) != '0' ) {
 		ungetc(hexpref[0], tape);
 		return 0;
