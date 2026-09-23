@@ -1,6 +1,6 @@
 # bcc-compiladores-2026
 
-Compilador didático da disciplina de **Compiladores** (BCC). O projeto evolui aula a aula: por enquanto temos a **análise léxica** e um **parser LL(1)** para expressões aritméticas (front-end incompleto — ainda sem AST, análise semântica ou geração de código).
+Compilador didático da disciplina de **Compiladores** (BCC). O projeto por enquanto tem a **análise léxica** e um **parser LL(1)** para expressões aritméticas (front-end incompleto — ainda sem AST, análise semântica ou geração de código).
 
 O executável gerado chama-se `mybc` (*my basic calculator* / reconhecêdor de expressões).
 
@@ -60,10 +60,10 @@ Enunciado (2026-09-09):
 - Vários comentários (e espaços) em sequência devem ser ignorados antes do próximo token.
 
 **Bug corrigido (EOF / `}`):**  
-A versão anterior usava `while ((head = getc()) != '}')` sem tratar `EOF`, o que **travava** em comentário não fechado (`getc` continua devolvendo `EOF` e `EOF != '}'`).  
+Anteriormente usava `while ((head = getc()) != '}')` sem tratar `EOF`, o que **travava** em comentário não fechado (`getc` continua devolvendo `EOF` e `EOF != '}'`).  
 Na tentativa de corrigir isso, um `getc()` extra após `\{` / `\}` podia **consumir o `}` de fechamento** e reportar `unclosed comment` em comentário válido (ex.: `{\}}`).
 
-A versão atual (sem `goto`, no mesmo estilo `while (1)` / `break` do restante do lexer):
+A versão atual:
 
 - laço externo: pula espaços e, se achar `{`, consome o comentário; senão devolve o caractere e sai;
 - laço interno: lê até `}`; se ver `\`, consome **só** o próximo caractere (não um `getc` a mais);
