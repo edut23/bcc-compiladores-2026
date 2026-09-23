@@ -29,7 +29,30 @@ void E(void)
 		match(lookahead);
 	}
 _T:
-	T();
+
+	//T();
+
+_F:
+
+	// F();
+	switch(lookahead) {
+		case ID:// it's a var'
+			match(ID); break;
+		case DEC:
+			match(DEC); break;
+		case OCT:
+			match(OCT); break;
+		case HEX:
+			match(HEX); break;
+		default:
+			match('('); E(); match(')');
+	}
+
+	// {otimes F}
+	if (lookahead == '*' || lookahead == '/') {
+		match(lookahead); 
+		goto _F;
+	}
 
 	// {oplus T}
 	if (lookahead == '+' || lookahead == '-') {
@@ -39,11 +62,25 @@ _T:
 
 }
 
+/*
 //  T -> F Q
 void T(void)
 {
 _F:
-	F();
+	// F();
+
+	switch(lookahead) {
+		case ID:// it's a var'
+			match(ID); break;
+		case DEC:
+			match(DEC); break;
+		case OCT:
+			match(OCT); break;
+		case HEX:
+			match(HEX); break;
+		default:
+			match('('); E(); match(')');
+	}
 
 	// {otimes F}
 	if (lookahead == '*' || lookahead == '/') {
@@ -51,6 +88,7 @@ _F:
 		goto _F;
 	}
 }
+*/
 
 //  R -> ['+''-'] T R | <empty>
 // void R(void)
@@ -69,6 +107,7 @@ _F:
 // 	else { ; }
 // }
 
+/*
 //  F -> ID | DEC | '(' E ')'
 void F(void)
 {
@@ -85,6 +124,7 @@ void F(void)
 			match('('); E(); match(')');
 	}
 }
+*/
 
 void match(int required)
 {
