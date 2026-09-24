@@ -6,6 +6,8 @@
 
 int line = 1;
 
+char lexeme[MAXSTRLEN+1];
+
 /*
 	2026-09-09: Implementem um varredor de comentários Pascal [void skipcomments(FILE *)], onde
 	um comentário começa com '{' e finaliza com '}', a menos que se utilize
@@ -69,15 +71,20 @@ void skipspaces(FILE *tape)
 
 int isID(FILE *tape)
 {
-	int head = getc(tape);
-
-	if (isalpha(head)) {
-		while(isalnum(head = getc(tape)));
-		ungetc(head, tape);
+	if ( isalpha((lexeme[0] = getc(tape))) ) {
+		int i = 1;
+		while( isalnum(lexeme[i] = getc(tape)) ) {
+			if (i < MAXSTRLEN) {
+				i++;
+			}
+		}
+		ungetc(lexeme[i], tape);
+		lexeme[i] = 0;
 		return ID;
 	}
-	ungetc(head, tape);
-
+	
+	ungetc(lexeme[0], tape);
+	lexeme[0] = 0;
 	return 0;
 }
 

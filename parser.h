@@ -1,6 +1,8 @@
 #pragma once
 
 extern FILE *source; // to be defined at main.c
+extern FILE *output;
+
 extern int lookahead;
 extern void E(void);
 extern void T(void);
