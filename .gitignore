@@ -2,3 +2,5 @@
 *.exe
 .vscode
 compile_flags.txt
+*.kdev4
+mybc
