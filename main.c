@@ -16,7 +16,7 @@ int main(void)
 
 	E();
 
-	printf("\n");
+	printf("%lg\n", acc);
 
 	return 0;
 }

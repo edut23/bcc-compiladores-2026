@@ -92,18 +92,25 @@ int isID(FILE *tape)
 
 int isDEC(FILE *tape)
 {
-	int head = getc(tape);
+	lexeme[0] = getc(tape);
 
-	if (isdigit(head)) {
-		if (head == '0') {
+	if (isdigit(lexeme[0])) {
+		if (lexeme[0] == '0') {
 			return DEC;
 		}
-		while( isdigit(head = getc(tape)) );
-		ungetc(head, tape);
+		int i = 1;
+		while( isdigit(lexeme[i] = getc(tape)) ) i++;
+		ungetc(lexeme[0], tape);
+		lexeme[i] = 0;
 		return DEC;
 	}
 
-	ungetc(head, tape);
+	ungetc(lexeme[0], tape);
+	return 0;
+}
+
+int isASGN(FILE *tape){
+	// tarefa de casa 07-10
 	return 0;
 }
 

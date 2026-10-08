@@ -3,3 +3,4 @@
 extern int gettoken(FILE *);
 extern void E(void);
 extern int lookahead;
+extern double acc;

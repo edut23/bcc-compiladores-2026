@@ -10,4 +10,5 @@ enum {
 	DEC,
 	OCT,
 	HEX,
+	ASGN, // := right-associative assignment
 };
