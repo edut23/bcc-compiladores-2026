@@ -88,11 +88,16 @@ void E(void)
 
 	if (otimesflg) {
 		//fprintf(output, " %c", otimesflg);
+		if (otimesflg == '*'){
+			acc = pop() * acc;
+		} else if (otimesflg == '/') {
+			acc = pop() / acc;
+		}
 		otimesflg = 0;
 	}
 
-	//tarefa de casa 07-10
 	if (lookahead == '*' || lookahead == '/') {
+		push();
 		otimesflg = lookahead;
 		match(lookahead);
 		goto _F;
@@ -108,11 +113,9 @@ void E(void)
 	if (oplusflg) {
 		//fprintf(output, " %c", oplusflg);
 		if (oplusflg == '+'){
-			acc = acc + pop();
-
+			acc = pop() + acc;
 		} else if (oplusflg == '-') {
-			// subtract here (tarefa de casa 07-10)
-			acc = acc - pop();
+			acc = pop() - acc;
 		}
 		oplusflg = 0;
 	}
