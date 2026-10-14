@@ -34,6 +34,20 @@ double pop(void){
 #define SYMTABSIZE 1024
 double vmem[SYMTABSIZE];
 char symtab[SYMTABSIZE][MAXSTRLEN+1];
+int symtab_next = 0;
+
+int lookup(char *name)
+{
+	int i;
+	for (i = 0; i < symtab_next; i++)
+		if (strcmp(symtab[i], name) == 0) return i;
+	strcpy(symtab[symtab_next], name);
+	return symtab_next++;
+}
+
+void store(char *name, double val) { vmem[lookup(name)] = val; }
+
+double recall(char *name) { return vmem[lookup(name)]; }
 
 void E(void)
 {
@@ -60,14 +74,13 @@ void E(void)
 			strcpy(name, lexeme);
 			match(ID); // ID is associated to a R-value or L-value variable
 			if (lookahead == ASGN){
-				//ID := E -> L-value
-				//store(name,acc);
+				// ID := E -> L-value
 				match(ASGN);
 				E();
+				store(name, acc);
 			} else {
 				// R-value
-				// acc = reacll(name); tarefa de casa tbm 07-10
-				;
+				acc = recall(name);
 			}
 			break;
 		case DEC:

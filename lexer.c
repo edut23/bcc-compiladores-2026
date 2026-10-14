@@ -79,6 +79,7 @@ int isDEC(FILE *tape)
 
 	if (isdigit(lexeme[0])) {
 		if (lexeme[0] == '0') {
+			lexeme[1] = 0;
 			return DEC;
 		}
 		int i = 1;
@@ -92,8 +93,19 @@ int isDEC(FILE *tape)
 	return 0;
 }
 
-int isASGN(FILE *tape){
-	// tarefa de casa 07-10
+// ASGN = ":="
+int isASGN(FILE *tape)
+{
+	int head;
+
+	if ( (head = getc(tape)) == ':' ) {
+		if ( (head = getc(tape)) == '=' ) {
+			return ASGN;
+		}
+		ungetc(head, tape);
+		head = ':';
+	}
+	ungetc(head, tape);
 	return 0;
 }
 
@@ -128,7 +140,7 @@ int isHEX(FILE *tape)
 		return 0;
 	}
 	// by now we got '0'
-	if ( (toupper(hexpref[1]) != 'X') ) {
+	if ( toupper(hexpref[1] = getc(tape)) != 'X' ) {
 		ungetc(hexpref[1], tape);
 		ungetc(hexpref[0], tape);
 		return 0;
@@ -170,6 +182,8 @@ int gettoken(FILE *src)
 	if ( (token = isHEX(src)) ) return token;
 	if ( (token = isDEC(src)) ) return token;// is DEC must be the last on the possibility
 											 // of zero ('0') be found
+	// assignment operator
+	if ( (token = isASGN(src)) ) return token;
 	// must be an ASCII character
 	token = getc(src);
 
