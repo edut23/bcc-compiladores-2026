@@ -83,7 +83,7 @@ int isDEC(FILE *tape)
 		}
 		int i = 1;
 		while( isdigit(lexeme[i] = getc(tape)) ) i++;
-		ungetc(lexeme[0], tape);
+		ungetc(lexeme[i], tape);
 		lexeme[i] = 0;
 		return DEC;
 	}
