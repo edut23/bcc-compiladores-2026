@@ -33,7 +33,7 @@ double pop(void){
 // indexator
 #define SYMTABSIZE 1024
 double vmem[SYMTABSIZE];
-char symtab[SYMTABSIZE][MAXSTRLEN];
+char symtab[SYMTABSIZE][MAXSTRLEN+1];
 
 void E(void)
 {
@@ -199,7 +199,7 @@ void match(int required)
 			fprintf(stderr, "token mismatch: %c while expected %c\nexiting with err\n",
 					lookahead, required);
 		} else {
-			if (lookahead == -1) {
+			if (lookahead == EOF) {
 				fprintf(stderr, "premature EOF seen at line %d\n", line);
 			} else {
 				if ( isprint(lookahead) ) {

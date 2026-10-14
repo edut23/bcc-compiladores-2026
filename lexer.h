@@ -5,5 +5,5 @@
 
 extern char lexeme[];
 
-void skipspaces(FILE *tape);
-void skipcomments(FILE *tape);
+extern void skipspaces(FILE *tape);
+extern void skipcomments(FILE *tape);

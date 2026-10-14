@@ -8,23 +8,6 @@ int line = 1;
 
 char lexeme[MAXSTRLEN+1];
 
-/*
-	2026-09-09: Implementem um varredor de comentários Pascal [void skipcomments(FILE *)], onde
-	um comentário começa com '{' e finaliza com '}', a menos que se utilize
-	"\{" e "\}", para ser interpretado como elemento do texto.
-	Exemplo:
-	begin {
-			isto é um comentário. Aqui, eu devo utilizar \{ e \} para constar no interior
-		    do comentário
-		  }     { outro comentário depois do comentário prévio }
-	  blah blah blah
-	end;
-
-	Bug corrigido: a tentativa anterior de tratar EOF (comentário sem '}')
-	introduzia um getc() extra após \{ / \}, o que podia consumir o '}'
-	real de fechamento. Agora cada caractere é lido uma vez; '\' apenas
-	"escapa" o próximo (incluindo '{' e '}'); EOF encerra com diagnóstico.
- */
 void skipcomments(FILE *tape)
 {
 	int head;
