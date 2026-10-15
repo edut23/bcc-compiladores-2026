@@ -49,7 +49,7 @@ void store(char *name, double val) { vmem[lookup(name)] = val; }
 
 double recall(char *name) { return vmem[lookup(name)]; }
 
-void E(void)
+void expr(void)
 {
 	char name[MAXSTRLEN+1];
 	// check prefixing signal
@@ -76,7 +76,7 @@ void E(void)
 			if (lookahead == ASGN){
 				// ID := E -> L-value
 				match(ASGN);
-				E();
+				expr();
 				store(name, acc);
 			} else {
 				// R-value
@@ -95,7 +95,7 @@ void E(void)
 			break;
 		default:
 			match('(');
-			E();
+			expr();
 			match(')');
 	}
 
@@ -229,6 +229,38 @@ void match(int required)
 				}
 			}
 		}
-		exit(-2);
+		exit(-2); //!!!!!!!!!!!!!!!!!!Vai ser um problema a resolver, com o exit ele quebra o gerenciador, sai com status de erro!!!!!!!!!!!
 	}
 }
+
+int isFirst(void)
+{
+	switch(lookahead) {
+		case '+':
+		case '-':
+		case ID:
+		case NUM:
+		case '(':
+			return lookahead;
+	}
+	return 0;
+}
+
+void mybc(void)
+{
+	while(lookahead != EOF) {
+		if (isFirst()) {
+			sp = -1; // Reset da pilha
+			expr(); // result is in acc
+			fprintf(output, "%lg\n", acc); // criar alguma variavel global de flag de erro, caso tenha algum erro nao eh para imprimir, em caso de erro eh para mostra msg de erro e reinicair
+		} else {
+			if (lookahead != '\n' && lookahead != ';') {
+     			fprintf(stderr, "Caractere inesperado '%c' na linha %d\n", lookahead, line);
+        		lookahead = gettoken(source); // Avança o token para nao travar
+    		}
+		}
+		if(lookahead == '\n' || lookahead == ';') {
+			match(lookahead);
+		}
+	}
+} 
