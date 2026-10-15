@@ -14,9 +14,7 @@ int main(void)
 
 	lookahead = gettoken(stdin);
 
-	E();
-
-	printf("%lg\n", acc);
+	mybc();
 
 	return 0;
 }

@@ -44,7 +44,10 @@ void skipspaces(FILE *tape)
 	int head;
 
 	while ( isspace(head = getc(tape)) ) {
-		if (head == '\n') line++;
+		if (head == '\n') {
+			line++;
+			break;
+		}
 	}
 	
 	ungetc(head, tape);
@@ -174,6 +177,7 @@ int gettoken(FILE *src)
 	
 	// find the next non white character
 	skipcomments(src);
+	skipspaces(src);
 
 	// variable name
 	if ( (token = isID(src)) ) return token;
