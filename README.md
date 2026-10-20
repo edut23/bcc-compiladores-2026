@@ -1,155 +1,159 @@
-# bcc-compiladores-2026
+# MyBC
 
-Compilador didático da disciplina de **Compiladores** (BCC). O projeto por enquanto tem a **análise léxica** e um **parser LL(1)** para expressões aritméticas (front-end incompleto — ainda sem AST, análise semântica ou geração de código).
+Interpretador de expressões aritméticas da disciplina de **Compiladores**. Lê a entrada padrão, reconhece a expressão (análise léxica + parser LL(1)), avalia com uma máquina de pilha simples e imprime o resultado.
 
-O executável gerado chama-se `mybc` (*my basic calculator* / reconhecêdor de expressões).
+O executável chama-se `mybc`. Os nomes dos fontes originais (`main`, `lexer`, `parser`) foram mantidos; a tabela de símbolos e a máquina virtual foram extraídas para `symtab.[ch]` e `vmachine.[ch]`.
 
 ---
 
-## Como compilar e rodar
+## Compilar e executar
 
 ```bash
-make          # gera ./mybc a partir de main.o, lexer.o e parser.o
-make clean    # remove .o
+make              # gera ./mybc
+make clean        # remove .o
+make mostlyclean  # remove .o e o executável
 ```
 
-A entrada é lida da **stdin**:
+A entrada é a **stdin**.
 
 ```bash
 ./mybc
-# digite a expressão e encerre com Ctrl+D (Linux/macOS) ou Ctrl+Z+Enter (Windows)
-
-echo "2+(3*4)" | ./mybc
+echo "2+3*4" | ./mybc
+printf 'x:=2\nx+1\n' | ./mybc
 ```
 
-Se a expressão for válida (segundo a gramática abaixo), o programa termina com código `0`. Caso contrário, emite diagnóstico em `stderr` e sai com código de erro.
+| Fluxo | Destino |
+|-------|---------|
+| resultado da expressão | **stdout** |
+| diagnóstico de erro | **stderr** |
+
+Após um erro, o processo **não** termina: a sentença atual é descartada e a próxima (nova linha ou `;`) é avaliada normalmente. O programa só encerra no EOF, com status `0`.
 
 ---
 
-## Arquitetura atual
-
-| Arquivo     | Papel |
-|-------------|--------|
-| `main.c`    | Driver: abre `stdin`, obtém o 1º *lookahead* e chama `E()` |
-| `lexer.c`   | Analisador léxico: espaços, comentários Pascal, IDs e literais |
-| `parser.c`  | Parser descendente recursivo LL(1) de expressões |
-| `tokens.h`  | Códigos de token (`ID`, `DEC`, `OCT`, `HEX`) |
-| `Makefile`  | Build com `-I.` |
-
-Fluxo:
+## Arquitetura
 
 ```
-fonte (stdin) → gettoken() → lookahead → match() / E → T → F
+fonte (stdin)
+    → gettoken()          lexer.c
+    → lookahead / match() parser.c
+    → expr()              parser.c  (sintaxe + ações semânticas)
+         ├─ push / pop / acc      vmachine.c
+         └─ store / recall        symtab.c
+    → stdout (valor) ou stderr (erro)
 ```
+
+| Arquivo | Papel |
+|---------|--------|
+| `main.c` | Abre stdin/stdout, lê o 1º token e chama `mybc()` |
+| `lexer.c` / `lexer.h` | Tokens, `lexeme[]`, comentários `{...}`, contador `line` |
+| `parser.c` / `parser.h` | Parser LL(1), `match()`, recuperação de erro, `mybc()` |
+| `symtab.c` / `symtab.h` | Nomes de variáveis e valores (`lookup`, `store`, `recall`) |
+| `vmachine.c` / `vmachine.h` | Acumulador `acc` e pilha (`push`, `pop`) |
+| `tokens.h` | Códigos `ID`, `DEC`, `OCT`, `HEX`, `ASGN` (`:=`) |
 
 ---
 
-## O que já foi implementado
-
-### 1. Análise léxica (`lexer.c`)
-
-#### Espaços em branco
-- `skipspaces()` descarta espaços, tabs e quebras de linha.
-- Quebras de linha incrementam o contador global `line` (usado nos diagnósticos).
-
-#### Comentários estilo Pascal — `skipcomments()`
-Enunciado (2026-09-09):
-
-- Comentário abre com `{` e fecha com `}`.
-- `\{` e `\}` são caracteres literais **dentro** do comentário (não abrem/fecham).
-- Vários comentários (e espaços) em sequência devem ser ignorados antes do próximo token.
-
-**Bug corrigido (EOF / `}`):**  
-Anteriormente usava `while ((head = getc()) != '}')` sem tratar `EOF`, o que **travava** em comentário não fechado (`getc` continua devolvendo `EOF` e `EOF != '}'`).  
-Na tentativa de corrigir isso, um `getc()` extra após `\{` / `\}` podia **consumir o `}` de fechamento** e reportar `unclosed comment` em comentário válido (ex.: `{\}}`).
-
-A versão atual:
-
-- laço externo: pula espaços e, se achar `{`, consome o comentário; senão devolve o caractere e sai;
-- laço interno: lê até `}`; se ver `\`, consome **só** o próximo caractere (não um `getc` a mais);
-- se `head == EOF` no meio do comentário → `unclosed comment at line N` e `exit(-4)` (sem hang);
-- não faz `ungetc(EOF)`.
-
-Exemplos:
-
-| Entrada | Comportamento |
-|---------|----------------|
-| `{ ok } 1+2` | Comentário ignorado; tokens de `1+2` |
-| `{ não fecha` + EOF | Erro: `unclosed comment` (não trava) |
-| `{\}}` | Comentário válido (`\}` literal + `}` fecha) |
-| `{ \{ \} }` | Comentário válido |
-
-#### Tokens reconhecidos
-
-| Token | Forma | Código |
-|-------|--------|--------|
-| Identificador | `[A-Za-z][A-Za-z0-9]*` | `ID` |
-| Decimal | `0` ou `[1-9][0-9]*` | `DEC` |
-| Octal | `0[0-7]+` | `OCT` |
-| Hexadecimal | `0[xX][0-9A-Fa-f]+` | `HEX` |
-| Operadores / pontuação | `+ - * / ( )` etc. | próprio ASCII |
-
-`gettoken()` chama `skipcomments()`, depois tenta `isID` → `isOCT` → `isHEX` → `isDEC` (nessa ordem: `0` pode ser prefixo de octal/hex) e, por fim, devolve o caractere ASCII lido.
-
-### 2. Análise sintática LL(1) (`parser.c`)
-
-Gramática de expressões (com sinal unário opcional e eliminação de recursão à esquerda / cauda):
+## Linguagem reconhecida
 
 ```
 E → ['+' | '-'] T { ('+' | '-') T }
 T → F { ('*' | '/') F }
-F → ID | DEC | OCT | HEX | '(' E ')'
+F → ID | ID := E | DEC | OCT | HEX | '(' E ')'
 ```
 
-- *Lookahead* de 1 token (`lookahead`).
-- `match(required)` consome se bater; senão diagnostica *token mismatch* ou `premature EOF` e sai com `exit(-2)`.
-- Recursões de cauda de `R`/`Q` foram substituídas por laços `while` (menos uso de pilha).
+- `*` e `/` têm precedência sobre `+` e `-`.
+- Sinal unário opcional no início da expressão (`-4+5` → `1`).
+- Atribuição `:=` é associativa à direita (`x:=y:=1`).
+- Várias expressões: uma por linha, ou separadas por `;`.
+- Comentários estilo Pascal: `{ ... }`. Dentro do comentário, `\{` e `\}` são literais (não abrem/fecham).
 
-Ainda **não** há avaliação numérica nem árvore sintática: o parser só **reconhece** se a entrada é uma expressão bem formada.
+### Tokens
 
-### 3. Driver (`main.c`)
-
-- `source = stdin`
-- `lookahead = gettoken(stdin)`
-- chama `E()` e retorna `0` se tudo ok
-
----
-
-## Códigos de saída (diagnósticos)
-
-| Código | Situação |
-|--------|----------|
-| `0` | Expressão reconhecida com sucesso |
-| `-2` | Erro sintático (`match` / EOF prematuro) |
-| `-4` | Comentário `{ ...` sem `}` até o EOF |
+| Token | Forma | Exemplo |
+|-------|--------|---------|
+| ID | `[A-Za-z][A-Za-z0-9]*` | `x`, `soma1` |
+| DEC | `0` ou `[1-9][0-9]*` | `0`, `42` |
+| OCT | `0[0-7]+` | `012` → 10 |
+| HEX | `0[xX][0-9A-Fa-f]+` | `0xff` → 255 |
+| ASGN | `:=` | `x:=2` |
+| operadores | `+ - * / ( )` | — |
+| delimitador | `\n` ou `;` | — |
 
 ---
 
-## Testes manuais sugeridos (comentários / EOF)
+## Avaliação (ações semânticas)
+
+A sintaxe (`match`, `switch`, `goto`) fica separada das ações de interpretação, marcadas no código como `/*N*/ ... /*N*/` (Aula 07):
+
+| Nº | Ação | Significado |
+|----|------|-------------|
+| 1 | `acc = -acc` | menos unário |
+| 2 | `push()` | guarda o operando esquerdo |
+| 3 | `acc = pop() + acc` | soma |
+| 4 | `acc = pop() - acc` | subtração |
+| 5 | `acc = pop() * acc` | multiplicação |
+| 6 | `acc = pop() / acc` | divisão |
+| 7 | `acc` ← literal | DEC / OCT / HEX |
+| 8 | `acc = recall(name)` | lê variável (R-value) |
+| 9 | `store(name, acc)` | atribuição (L-value) |
+
+O valor da expressão fica em `acc` e é impresso só se não houve erro.
+
+---
+
+## Exemplos de uso
+
+```text
+2+3*4              → 14
+(2+3)*4            → 20
+-4+5               → 1
+x:=2               → 2
+x+1                → 3
+012                → 10
+0xff               → 255
+{ comentario } 1+1 → 2
+2+3; 4*5           → 5   depois  20
+```
+
+---
+
+## Erros na linha de comando
+
+Todas as mensagens vão para **stderr**, com o número da linha. O token visto é a string do lexema (ou o caractere), não o código interno (`1024`, …).
+
+| Situação | Mensagem (stderr) | stdout |
+|----------|-------------------|--------|
+| token errado (`2+`, `2)` , falta `)`) | `token inesperado '...' na linha N (esperado ...)` | nada dessa sentença |
+| lixo depois da expressão (`1+2)`) | `token inesperado ... na linha N` | nada dessa sentença |
+| caractere que não inicia expressão (`*1`, `)`) | `caractere inesperado ... na linha N` | nada |
+| divisão por zero (`1/0`) | `divisão por zero na linha N` | nada |
+| `{` sem `}` até o EOF | `comentário não fechado na linha N` | — |
+| fim de arquivo no meio da expressão | `EOF prematuro na linha N (esperado ...)` | nada |
+
+A sentença com erro é descartada até `\n` ou `;`. A seguinte é avaliada.
 
 ```bash
-# comentário ok + expressão
-printf '{ comentario } 1+2\n' | ./mybc
+printf '2+\n3*4\n' | ./mybc
+# stderr: token inesperado ... na linha 1 (esperado '(')
+# stdout: 12
+```
 
-# escapes dentro do comentário
-printf '{\\} } 3*4\n' | ./mybc
-printf '{\\}} 5\n' | ./mybc
-
-# EOF sem fechar '}' — deve errar sem travar
-printf '{ comentario sem fechar' | ./mybc
+```bash
+printf '{ sem fechar' | ./mybc
+# stderr: comentário não fechado na linha 1
 ```
 
 ---
 
-## Estrutura do repositório
+## Continuidade após erro
 
-```
-bcc-compiladores-2026/
-├── main.c / main.h
-├── lexer.c / lexer.h
-├── parser.c / parser.h
-├── tokens.h
-├── Makefile
-├── test-pas.pas      # rascunho Pascal (não é entrada do mybc atual)
-└── README.md
-```
+Na versão mínima, `match()` chamava `exit(-2)` e o interpretador morria no primeiro erro. Agora:
+
+1. `match()` imprime o diagnóstico, liga `has_error` e **não** consome o token.
+2. `expr()` / `match()` retornam imediatamente se `has_error` (evita laço infinito nos `goto`).
+3. `mybc()` **não** imprime `acc` quando há erro.
+4. `skip_to_stmt_end()` avança até `\n`, `;` ou EOF.
+5. A pilha (`sp`) é zerada no início de cada sentença.
+
+O mesmo vale para comentário não fechado: não há `exit(-4)`.

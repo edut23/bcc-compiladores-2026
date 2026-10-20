@@ -1,96 +1,142 @@
-//<parser.c>::
+// Parser descendente recursivo e interpretação das expressões.
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <string.h>
 #include <tokens.h>
 #include <parser.h>
 #include <lexer.h>
-#include <string.h>
+#include <symtab.h>
+#include <vmachine.h>
 
-// lookahead is the compiler's eye which is traditionally defined here
-int             lookahead;
-extern char lexeme[];// stores the token string content
+int lookahead;
+int has_error = 0;
 
-// virtual machine definition
-// accumulator:
-double acc = 0;
-#define MAXSTACKSIZE 1024
-double stack[MAXSTACKSIZE];
-int sp = -1; //stack pointer
-
-void push(void){
-	sp++;
-	stack[sp] = acc;
-}
-
-double pop(void){
-	double aux = stack[sp];
-	sp--;
-	return aux;
-}
-
-// indexator
-#define SYMTABSIZE 1024
-double vmem[SYMTABSIZE];
-char symtab[SYMTABSIZE][MAXSTRLEN+1];
-int symtab_next = 0;
-
-int lookup(char *name)
+static const char *token_name(int token)
 {
-	int i;
-	for (i = 0; i < symtab_next; i++)
-		if (strcmp(symtab[i], name) == 0) return i;
-	strcpy(symtab[symtab_next], name);
-	return symtab_next++;
+	static char buf[8];
+
+	switch (token) {
+		case ID:   return "ID";
+		case DEC:  return "DEC";
+		case OCT:  return "OCT";
+		case HEX:  return "HEX";
+		case ASGN: return "':='";
+		case EOF:  return "EOF";
+		default:
+			if (isprint(token)) {
+				buf[0] = '\'';
+				buf[1] = (char)token;
+				buf[2] = '\'';
+				buf[3] = 0;
+				return buf;
+			}
+			snprintf(buf, sizeof buf, "%d", token);
+			return buf;
+	}
 }
 
-void store(char *name, double val) { vmem[lookup(name)] = val; }
+static void describe_seen(char *buf, size_t n)
+{
+	if (lookahead == EOF) {
+		snprintf(buf, n, "EOF");
+		return;
+	}
+	if (lookahead == ASGN) {
+		snprintf(buf, n, "':='");
+		return;
+	}
+	if (lookahead == ID || lookahead == DEC || lookahead == OCT || lookahead == HEX) {
+		snprintf(buf, n, "'%s'", lexeme);
+		return;
+	}
+	if (isprint(lookahead)) {
+		snprintf(buf, n, "'%c'", lookahead);
+		return;
+	}
+	snprintf(buf, n, "%s", token_name(lookahead));
+}
 
-double recall(char *name) { return vmem[lookup(name)]; }
+/* Descarta o resto da sentença até o delimitador. */
+static void skip_to_stmt_end(void)
+{
+	while (lookahead != '\n' && lookahead != ';' && lookahead != EOF)
+		lookahead = gettoken(source);
+}
 
+/* Consome o token esperado ou registra o erro, sem encerrar o processo. */
+void match(int required)
+{
+	if (has_error)
+		return;
+
+	if (lookahead == required) {
+		lookahead = gettoken(source);
+		return;
+	}
+
+	has_error = 1;
+	if (lookahead == EOF) {
+		fprintf(stderr, "EOF prematuro na linha %d (esperado %s)\n",
+			line, token_name(required));
+	} else {
+		char seen[MAXSTRLEN+4];
+		describe_seen(seen, sizeof seen);
+		fprintf(stderr, "token inesperado %s na linha %d (esperado %s)\n",
+			seen, line, token_name(required));
+	}
+}
+
+/* E → ['+'|'-'] T { ('+'|'-') T }  com T e F inlined. */
 void expr(void)
 {
 	char name[MAXSTRLEN+1];
-	// check prefixing signal
 	int sigflag = 0;
 	int otimesflg = 0;
 	int oplusflg = 0;
 
+	if (has_error)
+		return;
+
 	if (lookahead == '+' || lookahead == '-') {
-		if (lookahead == '-') {
-			sigflag = 1; // signal seen
-		}
+		if (lookahead == '-')
+			sigflag = 1;
 		match(lookahead);
 	}
 
-	_T:
-	// T();
-	_F:
-	// F();
+_T:
+	if (has_error)
+		return;
+_F:
+	if (has_error)
+		return;
+
 	switch (lookahead) {
 		case ID:
-			// fprintf(output, " %s", lexeme);
 			strcpy(name, lexeme);
-			match(ID); // ID is associated to a R-value or L-value variable
-			if (lookahead == ASGN){
-				// ID := E -> L-value
+			match(ID);
+			if (has_error)
+				return;
+			if (lookahead == ASGN) {
 				match(ASGN);
 				expr();
-				store(name, acc);
+				if (!has_error)
+					/*9*/ store(name, acc); /*9*/
 			} else {
-				// R-value
-				acc = recall(name);
+				/*8*/ acc = recall(name); /*8*/
 			}
 			break;
 		case DEC:
-			/**/acc = atoi(lexeme);/*semantic action*/
+			/*7*/ acc = atoi(lexeme); /*7*/
 			match(DEC);
 			break;
 		case OCT:
+			/*7*/ acc = strtol(lexeme, NULL, 8); /*7*/
 			match(OCT);
 			break;
 		case HEX:
+			/*7*/ acc = strtol(lexeme, NULL, 16); /*7*/
 			match(HEX);
 			break;
 		default:
@@ -99,168 +145,96 @@ void expr(void)
 			match(')');
 	}
 
+	if (has_error)
+		return;
+
 	if (otimesflg) {
-		//fprintf(output, " %c", otimesflg);
-		if (otimesflg == '*'){
-			acc = pop() * acc;
+		if (otimesflg == '*') {
+			/*5*/ acc = pop() * acc; /*5*/
 		} else if (otimesflg == '/') {
-			acc = pop() / acc;
+			if (acc == 0) {
+				fprintf(stderr, "divisão por zero na linha %d\n", line);
+				has_error = 1;
+				return;
+			}
+			/*6*/ acc = pop() / acc; /*6*/
 		}
 		otimesflg = 0;
 	}
 
 	if (lookahead == '*' || lookahead == '/') {
-		push();
+		/*2*/ push(); /*2*/
 		otimesflg = lookahead;
 		match(lookahead);
 		goto _F;
 	}
 
-	// term ends
 	if (sigflag) {
-		//fprintf(output, " neg");
-		acc = -acc;
-		sigflag = 0; // turn off sigflag
+		/*1*/ acc = -acc; /*1*/
+		sigflag = 0;
 	}
 
 	if (oplusflg) {
-		//fprintf(output, " %c", oplusflg);
-		if (oplusflg == '+'){
-			acc = pop() + acc;
+		if (oplusflg == '+') {
+			/*3*/ acc = pop() + acc; /*3*/
 		} else if (oplusflg == '-') {
-			acc = pop() - acc;
+			/*4*/ acc = pop() - acc; /*4*/
 		}
 		oplusflg = 0;
 	}
 
 	if (lookahead == '+' || lookahead == '-') {
-		push();
+		/*2*/ push(); /*2*/
 		oplusflg = lookahead;
 		match(lookahead);
 		goto _T;
 	}
-
 }
 
-/*
-//  T -> F Q
-void T(void)
+static int isFirst(void) /* token que pode iniciar uma expressão */
 {
-_F:
-	// F();
-
-	switch(lookahead) {
-		case ID:// it's a var'
-			match(ID); break;
-		case DEC:
-			match(DEC); break;
-		case OCT:
-			match(OCT); break;
-		case HEX:
-			match(HEX); break;
-		default:
-			match('('); E(); match(')');
-	}
-
-	// {otimes F}
-	if (lookahead == '*' || lookahead == '/') {
-		match(lookahead); 
-		goto _F;
-	}
-}
-*/
-
-//  R -> ['+''-'] T R | <empty>
-// void R(void)
-// {
-// 	if (lookahead == '+' || lookahead == '-')
-// 	{
-// 		match(lookahead); T(); R(); // undesired tail recursion
-// 	}
-// 	else { ; }
-// }
-
-//  Q -> ['*''/'] F Q | <empty>
-// void Q(void)
-// {
-// 	if (lookahead == '*' || lookahead == '/') { match(lookahead); F(); Q(); }
-// 	else { ; }
-// }
-
-/*
-//  F -> ID | DEC | '(' E ')'
-void F(void)
-{
-	switch(lookahead) {
-		case ID:// it's a var'
-			match(ID); break;
-		case DEC:
-			match(DEC); break;
-		case OCT:
-			match(OCT); break;
-		case HEX:
-			match(HEX); break;
-		default:
-			match('('); E(); match(')');
-	}
-}
-*/
-
-void match(int required)
-{
-	if (lookahead == required) {
-		lookahead = gettoken(source);
-	} else {
-		if (isprint(lookahead)) {
-			fprintf(stderr, "token mismatch: %c while expected %c\nexiting with err\n",
-					lookahead, required);
-		} else {
-			if (lookahead == EOF) {
-				fprintf(stderr, "premature EOF seen at line %d\n", line);
-			} else {
-				if ( isprint(lookahead) ) {
-					fprintf(stderr,
-						"token mismatch: %c while expected %c at line %d\nexiting with err\n",
-						lookahead, required, line);
-				} else {
-					fprintf(stderr,
-							"token mismatch: %d while expected %d at line %d\nexiting with err\n",
-							lookahead, required, line);
-				}
-			}
-		}
-		exit(-2); //!!!!!!!!!!!!!!!!!!Vai ser um problema a resolver, com o exit ele quebra o gerenciador, sai com status de erro!!!!!!!!!!!
-	}
-}
-
-int isFirst(void)
-{
-	switch(lookahead) {
+	switch (lookahead) {
 		case '+':
 		case '-':
 		case ID:
-		case NUM:
+		case DEC:
+		case OCT:
+		case HEX:
 		case '(':
 			return lookahead;
 	}
 	return 0;
 }
 
+/* Laço do interpretador: uma expressão por linha ou ponto-e-vírgula. */
 void mybc(void)
 {
-	while(lookahead != EOF) {
+	while (lookahead != EOF) {
+		has_error = 0;
+		sp = -1;
+
 		if (isFirst()) {
-			sp = -1; // Reset da pilha
-			expr(); // result is in acc
-			fprintf(output, "%lg\n", acc); // criar alguma variavel global de flag de erro, caso tenha algum erro nao eh para imprimir, em caso de erro eh para mostra msg de erro e reinicair
-		} else {
-			if (lookahead != '\n' && lookahead != ';') {
-     			fprintf(stderr, "Caractere inesperado '%c' na linha %d\n", lookahead, line);
-        		lookahead = gettoken(source); // Avança o token para nao travar
-    		}
+			expr();
+			if (!has_error && lookahead != '\n' && lookahead != ';' && lookahead != EOF) {
+				char seen[MAXSTRLEN+4];
+				describe_seen(seen, sizeof seen);
+				fprintf(stderr, "token inesperado %s na linha %d\n", seen, line);
+				has_error = 1;
+			}
+			if (!has_error)
+				fprintf(output, "%lg\n", acc);
+		} else if (lookahead != '\n' && lookahead != ';') {
+			char seen[MAXSTRLEN+4];
+			describe_seen(seen, sizeof seen);
+			fprintf(stderr, "caractere inesperado %s na linha %d\n", seen, line);
+			has_error = 1;
 		}
-		if(lookahead == '\n' || lookahead == ';') {
+
+		if (has_error)
+			skip_to_stmt_end();
+
+		has_error = 0;
+		if (lookahead == '\n' || lookahead == ';')
 			match(lookahead);
-		}
 	}
-} 
+}

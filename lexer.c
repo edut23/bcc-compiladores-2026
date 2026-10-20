@@ -1,13 +1,30 @@
+// Reconhece identificadores, literais, := e ignora espaços/comentários.
+
 #include <stdio.h>
-#include <stdlib.h>
 #include <ctype.h>
 #include <tokens.h>
 #include <lexer.h>
+#include <parser.h>
 
 int line = 1;
-
 char lexeme[MAXSTRLEN+1];
 
+/* Espaços horizontais. A quebra de linha vira token e incrementa `line`. */
+void skipspaces(FILE *tape)
+{
+	int head;
+
+	while (isspace(head = getc(tape))) {
+		if (head == '\n') {
+			line++;
+			break;
+		}
+	}
+
+	ungetc(head, tape);
+}
+
+/* Comentários Pascal `{ ... }`. `\{` e `\}` são literais. */
 void skipcomments(FILE *tape)
 {
 	int head;
@@ -24,7 +41,7 @@ void skipcomments(FILE *tape)
 		startline = line;
 		while ((head = getc(tape)) != '}') {
 			if (head == '\\') {
-				/* \{ e \} entram no texto; não fecham o comentário */
+				/* \{ e \} são literais; não fecham o comentário */
 				head = getc(tape);
 			}
 
@@ -32,67 +49,52 @@ void skipcomments(FILE *tape)
 				line++;
 
 			if (head == EOF) {
-				fprintf(stderr, "unclosed comment at line %d\n", startline);
-				exit(-4);
+				fprintf(stderr, "comentário não fechado na linha %d\n", startline);
+				has_error = 1;
+				return;
 			}
 		}
 	}
-}
-
-void skipspaces(FILE *tape)
-{
-	int head;
-
-	while ( isspace(head = getc(tape)) ) {
-		if (head == '\n') {
-			line++;
-			break;
-		}
-	}
-	
-	ungetc(head, tape);
 }
 
 // ID = [A-Za-z][A-Za-z0-9]*
-
 int isID(FILE *tape)
 {
-	if ( isalpha((lexeme[0] = getc(tape))) ) {
+	if (isalpha((lexeme[0] = getc(tape)))) {
 		int i = 1;
-		while( isalnum(lexeme[i] = getc(tape)) ) {
-			if (i < MAXSTRLEN) {
+		while (isalnum(lexeme[i] = getc(tape))) {
+			if (i < MAXSTRLEN)
 				i++;
-			}
 		}
 		ungetc(lexeme[i], tape);
 		lexeme[i] = 0;
 		return ID;
 	}
-	
+
 	ungetc(lexeme[0], tape);
 	lexeme[0] = 0;
 	return 0;
 }
 
 // DEC = 0 | [1-9][0-9]*
-
 int isDEC(FILE *tape)
 {
 	lexeme[0] = getc(tape);
 
-	if (isdigit(lexeme[0])) {
+	if (isdigit((unsigned char)lexeme[0])) {
 		if (lexeme[0] == '0') {
 			lexeme[1] = 0;
 			return DEC;
 		}
 		int i = 1;
-		while( isdigit(lexeme[i] = getc(tape)) ) i++;
+		while (isdigit((unsigned char)(lexeme[i] = getc(tape)))) i++;
 		ungetc(lexeme[i], tape);
 		lexeme[i] = 0;
 		return DEC;
 	}
 
 	ungetc(lexeme[0], tape);
+	lexeme[0] = 0;
 	return 0;
 }
 
@@ -101,8 +103,11 @@ int isASGN(FILE *tape)
 {
 	int head;
 
-	if ( (head = getc(tape)) == ':' ) {
-		if ( (head = getc(tape)) == '=' ) {
+	if ((head = getc(tape)) == ':') {
+		if ((head = getc(tape)) == '=') {
+			lexeme[0] = ':';
+			lexeme[1] = '=';
+			lexeme[2] = 0;
 			return ASGN;
 		}
 		ungetc(head, tape);
@@ -115,81 +120,86 @@ int isASGN(FILE *tape)
 // OCT = 0[0-7]+
 int isOCT(FILE *tape)
 {
-	int head, prfx;
+	int i;
 
-	if( (prfx = getc(tape)) == '0') {
-
-		if ( '0' <= (head = getc(tape)) && head <= '7' ) {
-
-			while ( '0' <= (head = getc(tape)) && head <= '7' );
-			ungetc(head, tape);
-			return OCT;
-
-		}
-
-		ungetc(head, tape);
+	lexeme[0] = getc(tape);
+	if (lexeme[0] != '0') {
+		ungetc(lexeme[0], tape);
+		lexeme[0] = 0;
+		return 0;
 	}
 
-	ungetc(prfx, tape);
-	return 0;
+	lexeme[1] = getc(tape);
+	if (lexeme[1] < '0' || lexeme[1] > '7') {
+		ungetc(lexeme[1], tape);
+		ungetc(lexeme[0], tape);
+		lexeme[0] = 0;
+		return 0;
+	}
+
+	i = 2;
+	while (i < MAXSTRLEN && (lexeme[i] = getc(tape)) >= '0' && lexeme[i] <= '7')
+		i++;
+	ungetc(lexeme[i], tape);
+	lexeme[i] = 0;
+	return OCT;
 }
 
 // HEX = 0[xX][0-9A-Fa-f]+
 int isHEX(FILE *tape)
 {
-	int hexpref[2];
-	if ( (hexpref[0] = getc(tape)) != '0' ) {
-		ungetc(hexpref[0], tape);
-		return 0;
-	}
-	// by now we got '0'
-	if ( toupper(hexpref[1] = getc(tape)) != 'X' ) {
-		ungetc(hexpref[1], tape);
-		ungetc(hexpref[0], tape);
+	int i;
+
+	lexeme[0] = getc(tape);
+	if (lexeme[0] != '0') {
+		ungetc(lexeme[0], tape);
+		lexeme[0] = 0;
 		return 0;
 	}
 
-	// at this point we got prefix "0[xX]"
-	int head = getc(tape);
-
-	// check wether head is in [0-9A-Fa-f]
-	if (isxdigit(head)) {
-		while ( isxdigit(head = getc(tape)) );
-		ungetc(head, tape);
-		return HEX;
+	lexeme[1] = getc(tape);
+	if (toupper((unsigned char)lexeme[1]) != 'X') {
+		ungetc(lexeme[1], tape);
+		ungetc(lexeme[0], tape);
+		lexeme[0] = 0;
+		return 0;
 	}
 
-	// give back what is not a hex-digit
-	ungetc(head, tape);
+	lexeme[2] = getc(tape);
+	if (!isxdigit((unsigned char)lexeme[2])) {
+		ungetc(lexeme[2], tape);
+		ungetc(lexeme[1], tape);
+		ungetc(lexeme[0], tape);
+		lexeme[0] = 0;
+		return 0;
+	}
 
-	// give back the hex prefix
-	ungetc(hexpref[1], tape);
-	ungetc(hexpref[0], tape);
-	return 0;
+	i = 3;
+	while (i < MAXSTRLEN && isxdigit((unsigned char)(lexeme[i] = getc(tape))))
+		i++;
+	ungetc(lexeme[i], tape);
+	lexeme[i] = 0;
+	return HEX;
 }
 
-// Main module (not main function) to call everything above
-// int gettoken(FILE *); // must be visible to the parser
-            
 int gettoken(FILE *src)
 {
 	int token;
-	
-	// find the next non white character
-	skipcomments(src);
-	skipspaces(src);
 
-	// variable name
-	if ( (token = isID(src)) ) return token;
-	// integer numbers
-	if ( (token = isOCT(src)) ) return token;
-	if ( (token = isHEX(src)) ) return token;
-	if ( (token = isDEC(src)) ) return token;// is DEC must be the last on the possibility
-											 // of zero ('0') be found
-	// assignment operator
-	if ( (token = isASGN(src)) ) return token;
-	// must be an ASCII character
+	skipcomments(src); /* já ignora espaços e comentários em sequência */
+
+	if ((token = isID(src))) return token;
+	if ((token = isOCT(src))) return token;
+	if ((token = isHEX(src))) return token;
+	if ((token = isDEC(src))) return token;
+	if ((token = isASGN(src))) return token;
+
 	token = getc(src);
-
+	if (token == EOF) {
+		lexeme[0] = 0;
+	} else {
+		lexeme[0] = token;
+		lexeme[1] = 0;
+	}
 	return token;
 }

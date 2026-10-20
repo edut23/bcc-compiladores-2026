@@ -1,0 +1,30 @@
+// Memória de variáveis: busca ou insere o nome e guarda o valor em vmem.
+
+#include <string.h>
+#include <lexer.h>
+#include <symtab.h>
+
+#define SYMTABSIZE 1024
+
+double vmem[SYMTABSIZE];
+char symtab[SYMTABSIZE][MAXSTRLEN+1];
+int symtab_next = 0;
+
+int lookup(char *name) /* índice de `name`, inserindo se ainda não existir */
+{
+	int i;
+	for (i = 0; i < symtab_next; i++)
+		if (strcmp(symtab[i], name) == 0) return i;
+	strcpy(symtab[symtab_next], name);
+	return symtab_next++;
+}
+
+void store(char *name, double val)
+{
+	vmem[lookup(name)] = val;
+}
+
+double recall(char *name)
+{
+	return vmem[lookup(name)];
+}
