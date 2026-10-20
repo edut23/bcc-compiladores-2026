@@ -13,7 +13,7 @@
 int lookahead;
 int has_error = 0;
 
-static const char *token_name(int token)
+static const char *token_name(int token) /* nome imprimível do token esperado */
 {
 	static char buf[8];
 
@@ -37,7 +37,7 @@ static const char *token_name(int token)
 	}
 }
 
-static void describe_seen(char *buf, size_t n)
+static void describe_seen(char *buf, size_t n) /* string do token que chegou */
 {
 	if (lookahead == EOF) {
 		snprintf(buf, n, "EOF");
@@ -76,7 +76,7 @@ void match(int required)
 		return;
 	}
 
-	has_error = 1;
+	has_error = 1; /* mismatch: não aborta, só marca */
 	if (lookahead == EOF) {
 		fprintf(stderr, "EOF prematuro na linha %d (esperado %s)\n",
 			line, token_name(required));
@@ -99,9 +99,9 @@ void expr(void)
 	if (has_error)
 		return;
 
-	if (lookahead == '+' || lookahead == '-') {
+	if (lookahead == '+' || lookahead == '-') { /* possível prefixo + ou - */
 		if (lookahead == '-')
-			sigflag = 1;
+			sigflag = 1; /* ativa o menos unário */
 		match(lookahead);
 	}
 
@@ -152,7 +152,7 @@ _F:
 		if (otimesflg == '*') {
 			/*5*/ acc = pop() * acc; /*5*/
 		} else if (otimesflg == '/') {
-			if (acc == 0) {
+			if (acc == 0) { /* divisor nulo */
 				fprintf(stderr, "divisão por zero na linha %d\n", line);
 				has_error = 1;
 				return;
@@ -162,9 +162,9 @@ _F:
 		otimesflg = 0;
 	}
 
-	if (lookahead == '*' || lookahead == '/') {
+	if (lookahead == '*' || lookahead == '/') { /* Otimes à frente */
 		/*2*/ push(); /*2*/
-		otimesflg = lookahead;
+		otimesflg = lookahead; /* * ou / pendente */
 		match(lookahead);
 		goto _F;
 	}
@@ -183,9 +183,9 @@ _F:
 		oplusflg = 0;
 	}
 
-	if (lookahead == '+' || lookahead == '-') {
+	if (lookahead == '+' || lookahead == '-') { /* Oplus à frente */
 		/*2*/ push(); /*2*/
-		oplusflg = lookahead;
+		oplusflg = lookahead; /* + ou - pendente */
 		match(lookahead);
 		goto _T;
 	}
@@ -215,7 +215,7 @@ void mybc(void)
 
 		if (isFirst()) {
 			expr();
-			if (!has_error && lookahead != '\n' && lookahead != ';' && lookahead != EOF) {
+			if (!has_error && lookahead != '\n' && lookahead != ';' && lookahead != EOF) { /* lixo após a expressão */
 				char seen[MAXSTRLEN+4];
 				describe_seen(seen, sizeof seen);
 				fprintf(stderr, "token inesperado %s na linha %d\n", seen, line);
@@ -223,7 +223,7 @@ void mybc(void)
 			}
 			if (!has_error)
 				fprintf(output, "%lg\n", acc);
-		} else if (lookahead != '\n' && lookahead != ';') {
+		} else if (lookahead != '\n' && lookahead != ';') { /* não inicia expressão */
 			char seen[MAXSTRLEN+4];
 			describe_seen(seen, sizeof seen);
 			fprintf(stderr, "caractere inesperado %s na linha %d\n", seen, line);

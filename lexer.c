@@ -48,7 +48,7 @@ void skipcomments(FILE *tape)
 			if (head == '\n')
 				line++;
 
-			if (head == EOF) {
+			if (head == EOF) { /* { sem } */
 				fprintf(stderr, "comentário não fechado na linha %d\n", startline);
 				has_error = 1;
 				return;

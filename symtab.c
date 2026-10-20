@@ -19,12 +19,12 @@ int lookup(char *name) /* índice de `name`, inserindo se ainda não existir */
 	return symtab_next++;
 }
 
-void store(char *name, double val)
+void store(char *name, double val) /* grava `val` na variável `name` */
 {
 	vmem[lookup(name)] = val;
 }
 
-double recall(char *name)
+double recall(char *name) /* devolve o valor de `name` */
 {
 	return vmem[lookup(name)];
 }
