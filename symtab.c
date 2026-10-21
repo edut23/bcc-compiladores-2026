@@ -3,6 +3,8 @@
 #include <string.h>
 #include <lexer.h>
 #include <symtab.h>
+#include <stdio.h>  
+#include <stdlib.h> 
 
 #define SYMTABSIZE 1024
 
@@ -15,6 +17,12 @@ int lookup(char *name) /* índice de `name`, inserindo se ainda não existir */
 	int i;
 	for (i = 0; i < symtab_next; i++)
 		if (strcmp(symtab[i], name) == 0) return i;
+
+	if (symtab_next >= SYMTABSIZE) {
+		fprintf(stderr, "Erro fatal: limite da tabela de simbolos excedido.\n");
+		exit(1);
+	}
+
 	strcpy(symtab[symtab_next], name);
 	return symtab_next++;
 }
