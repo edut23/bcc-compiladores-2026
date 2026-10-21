@@ -5,6 +5,7 @@
 #include <tokens.h>
 #include <lexer.h>
 #include <parser.h>
+#include <keywords.h>
 
 int line = 1;
 char lexeme[MAXSTRLEN+1];
@@ -15,10 +16,10 @@ void skipspaces(FILE *tape)
 	int head;
 
 	while (isspace(head = getc(tape))) {
-		if (head == '\n') {
-			line++;
-			break;
-		}
+    	if (head == '\n') {
+        	line++;
+        	break;
+    	}
 	}
 
 	ungetc(head, tape);
@@ -31,29 +32,29 @@ void skipcomments(FILE *tape)
 	int startline;
 
 	while (1) {
-		skipspaces(tape);
-		if ((head = getc(tape)) != '{') {
-			if (head != EOF)
-				ungetc(head, tape);
-			break;
-		}
+    	skipspaces(tape);
+    	if ((head = getc(tape)) != '{') {
+        	if (head != EOF)
+            	ungetc(head, tape);
+        	break;
+    	}
 
-		startline = line;
-		while ((head = getc(tape)) != '}') {
-			if (head == '\\') {
-				/* \{ e \} são literais; não fecham o comentário */
-				head = getc(tape);
-			}
+    	startline = line;
+    	while ((head = getc(tape)) != '}') {
+        	if (head == '\\') {
+            	/* \{ e \} são literais; não fecham o comentário */
+            	head = getc(tape);
+        	}
 
-			if (head == '\n')
-				line++;
+        	if (head == '\n')
+            	line++;
 
-			if (head == EOF) { /* { sem } */
-				fprintf(stderr, "comentário não fechado na linha %d\n", startline);
-				has_error = 1;
-				return;
-			}
-		}
+        	if (head == EOF) { /* { sem } */
+            	fprintf(stderr, "comentário não fechado na linha %d\n", startline);
+            	has_error = 1;
+            	return;
+        	}
+    	}
 	}
 }
 
@@ -61,14 +62,18 @@ void skipcomments(FILE *tape)
 int isID(FILE *tape)
 {
 	if (isalpha((lexeme[0] = getc(tape)))) {
-		int i = 1;
-		while (isalnum(lexeme[i] = getc(tape))) {
-			if (i < MAXSTRLEN)
-				i++;
+    	int i = 1;
+    	while (isalnum(lexeme[i] = getc(tape))) {
+        	if (i < MAXSTRLEN)
+            	i++;
+    	}
+    	ungetc(lexeme[i], tape);
+    	lexeme[i] = 0;
+		int token;
+		if ((token = isKeyword(lexeme))) {
+			return token;
 		}
-		ungetc(lexeme[i], tape);
-		lexeme[i] = 0;
-		return ID;
+    	return ID;
 	}
 
 	ungetc(lexeme[0], tape);
@@ -82,15 +87,15 @@ int isDEC(FILE *tape)
 	lexeme[0] = getc(tape);
 
 	if (isdigit((unsigned char)lexeme[0])) {
-		if (lexeme[0] == '0') {
-			lexeme[1] = 0;
-			return DEC;
-		}
-		int i = 1;
-		while (isdigit((unsigned char)(lexeme[i] = getc(tape)))) i++;
-		ungetc(lexeme[i], tape);
-		lexeme[i] = 0;
-		return DEC;
+    	if (lexeme[0] == '0') {
+        	lexeme[1] = 0;
+        	return DEC;
+    	}
+    	int i = 1;
+    	while (isdigit((unsigned char)(lexeme[i] = getc(tape)))) i++;
+    	ungetc(lexeme[i], tape);
+    	lexeme[i] = 0;
+    	return DEC;
 	}
 
 	ungetc(lexeme[0], tape);
@@ -104,82 +109,60 @@ int isASGN(FILE *tape)
 	int head;
 
 	if ((head = getc(tape)) == ':') {
-		if ((head = getc(tape)) == '=') {
-			lexeme[0] = ':';
-			lexeme[1] = '=';
-			lexeme[2] = 0;
-			return ASGN;
-		}
-		ungetc(head, tape);
-		head = ':';
+    	if ((head = getc(tape)) == '=') {
+        	lexeme[0] = ':';
+        	lexeme[1] = '=';
+        	lexeme[2] = 0;
+        	return ASGN;
+    	}
+    	ungetc(head, tape);
+    	head = ':';
 	}
 	ungetc(head, tape);
 	return 0;
 }
 
-// OCT = 0[0-7]+
-int isOCT(FILE *tape)
-{
-	int i;
-
+int isRELOP(FILE *tape){
+    
 	lexeme[0] = getc(tape);
-	if (lexeme[0] != '0') {
-		ungetc(lexeme[0], tape);
-		lexeme[0] = 0;
-		return 0;
-	}
-
 	lexeme[1] = getc(tape);
-	if (lexeme[1] < '0' || lexeme[1] > '7') {
-		ungetc(lexeme[1], tape);
-		ungetc(lexeme[0], tape);
-		lexeme[0] = 0;
-		return 0;
+	lexeme[2] = 0;
+    
+	switch(lexeme[0]){
+    	case '<':
+        	switch(lexeme[1]){
+            	case '=':
+                	return LEQ;
+            	case '>':
+                	return NEQ;
+            	default:
+                	ungetc(lexeme[1], tape);
+                	lexeme[1] = 0;
+                	return '<';
+        	}
+    	case '>':
+        	switch(lexeme[1]){
+            	case '=':
+                	return GEQ;
+            	default:
+                	ungetc(lexeme[1], tape);
+                	lexeme[1] = 0;
+                	return '>';
+        	}
+    	case '=':
+        	ungetc(lexeme[1], tape);
+        	lexeme[1] = 0;
+        	return '=';
 	}
-
-	i = 2;
-	while (i < MAXSTRLEN && (lexeme[i] = getc(tape)) >= '0' && lexeme[i] <= '7')
-		i++;
-	ungetc(lexeme[i], tape);
-	lexeme[i] = 0;
-	return OCT;
+    
+	ungetc(lexeme[1], tape);
+	ungetc(lexeme[0], tape);
+	lexeme[1] = 0;
+	lexeme[0] = 0;
 }
 
-// HEX = 0[xX][0-9A-Fa-f]+
-int isHEX(FILE *tape)
-{
-	int i;
-
-	lexeme[0] = getc(tape);
-	if (lexeme[0] != '0') {
-		ungetc(lexeme[0], tape);
-		lexeme[0] = 0;
-		return 0;
-	}
-
-	lexeme[1] = getc(tape);
-	if (toupper((unsigned char)lexeme[1]) != 'X') {
-		ungetc(lexeme[1], tape);
-		ungetc(lexeme[0], tape);
-		lexeme[0] = 0;
-		return 0;
-	}
-
-	lexeme[2] = getc(tape);
-	if (!isxdigit((unsigned char)lexeme[2])) {
-		ungetc(lexeme[2], tape);
-		ungetc(lexeme[1], tape);
-		ungetc(lexeme[0], tape);
-		lexeme[0] = 0;
-		return 0;
-	}
-
-	i = 3;
-	while (i < MAXSTRLEN && isxdigit((unsigned char)(lexeme[i] = getc(tape))))
-		i++;
-	ungetc(lexeme[i], tape);
-	lexeme[i] = 0;
-	return HEX;
+// antigo isNUM que não temos
+int isFLT(FILE *tape){
 }
 
 int gettoken(FILE *src)
@@ -196,10 +179,10 @@ int gettoken(FILE *src)
 
 	token = getc(src);
 	if (token == EOF) {
-		lexeme[0] = 0;
+    	lexeme[0] = 0;
 	} else {
-		lexeme[0] = token;
-		lexeme[1] = 0;
+    	lexeme[0] = token;
+    	lexeme[1] = 0;
 	}
 	return token;
 }
