@@ -12,7 +12,7 @@ int main(void)
 	output = stdout;
 
 	lookahead = gettoken(source);
-	mybc();
+	program();
 
 	return 0;
 }

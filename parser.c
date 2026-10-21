@@ -8,7 +8,7 @@
 #include <parser.h>
 #include <lexer.h>
 #include <symtab.h>
-#include <vmachine.h>
+#include <keywords.h>
 
 int lookahead;
 int has_error = 0;
@@ -207,7 +207,7 @@ static int isFirst(void) /* token que pode iniciar uma expressão */
 }
 
 /* Laço do interpretador: uma expressão por linha ou ponto-e-vírgula. */
-void mybc(void)
+void program(void)
 {
 	while (lookahead != EOF) {
 		has_error = 0;

@@ -6,13 +6,19 @@
 #include <stdio.h>  
 #include <stdlib.h> 
 
-#define SYMTABSIZE 1024
+/*
+typedef struct _symtab_ {
+	char name[MAXSTRLEN+1];
+	int type;
+	char offset[MAXSTRLEN+1];
+} SYMTAB;
+*/
 
 double vmem[SYMTABSIZE];
-char symtab[SYMTABSIZE][MAXSTRLEN+1];
+SYMTAB symtab[SYMTABSIZE];
 int symtab_next = 0;
 
-int lookup(char *name) /* índice de `name`, inserindo se ainda não existir */
+int symtab_lookup(char *name) /* índice de `name`, inserindo se ainda não existir */
 {
 	int i;
 	for (i = 0; i < symtab_next; i++)
@@ -24,6 +30,18 @@ int lookup(char *name) /* índice de `name`, inserindo se ainda não existir */
 	}
 
 	strcpy(symtab[symtab_next], name);
+	return symtab_next++;
+}
+
+int symtab_append(const char *name)
+{
+	if (symtab_next >= SYMTABSIZE) {
+		fprintf(stderr, "Erro fatal: limite da tabela de simbolos excedido.\n");
+		exit(1);
+	}
+	strcpy(symtab[symtab_next].name, name);
+	symtab[symtab_next].type = type;
+	symtab[symtab_next].offset = offset;
 	return symtab_next++;
 }
 
