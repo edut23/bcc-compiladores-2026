@@ -159,9 +159,10 @@ int isRELOP(FILE *tape)
 	return lexeme[0] = 0;
 }
 
-// NUM = [0-9]+ EE | [0-9]+\.[0-9]* | [0-9]*\.[0-9]+
+// NUM = [0-9]+ EE | [0-9]+\.[0-9]* | [0-9]*\.[0-9]+  ___ Transformar para isNum e nele verificar se é inteiro ou float chamando o isDec dentro dele, usar appendix
 int isFLT(FILE *tape)
 {
+
 	if (isdigit(lexeme[0] = getc(tape))) {
 		double aux;
 		ungetc(lexeme[0], tape);
@@ -174,71 +175,6 @@ int isFLT(FILE *tape)
 	return 0;
 }
 
-// OCT = 0[0-7]+
-int isOCT(FILE *tape)
-{
-	int i;
-
-	lexeme[0] = getc(tape);
-	if (lexeme[0] != '0') {
-		ungetc(lexeme[0], tape);
-		lexeme[0] = 0;
-		return 0;
-	}
-
-	lexeme[1] = getc(tape);
-	if (lexeme[1] < '0' || lexeme[1] > '7') {
-		ungetc(lexeme[1], tape);
-		ungetc(lexeme[0], tape);
-		lexeme[0] = 0;
-		return 0;
-	}
-
-	i = 2;
-	while (i < MAXSTRLEN && (lexeme[i] = getc(tape)) >= '0' && lexeme[i] <= '7')
-		i++;
-	ungetc(lexeme[i], tape);
-	lexeme[i] = 0;
-	return OCT;
-}
-
-// HEX = 0[xX][0-9A-Fa-f]+
-int isHEX(FILE *tape)
-{
-	int i;
-
-	lexeme[0] = getc(tape);
-	if (lexeme[0] != '0') {
-		ungetc(lexeme[0], tape);
-		lexeme[0] = 0;
-		return 0;
-	}
-
-	lexeme[1] = getc(tape);
-	if (toupper((unsigned char)lexeme[1]) != 'X') {
-		ungetc(lexeme[1], tape);
-		ungetc(lexeme[0], tape);
-		lexeme[0] = 0;
-		return 0;
-	}
-
-	lexeme[2] = getc(tape);
-	if (!isxdigit((unsigned char)lexeme[2])) {
-		ungetc(lexeme[2], tape);
-		ungetc(lexeme[1], tape);
-		ungetc(lexeme[0], tape);
-		lexeme[0] = 0;
-		return 0;
-	}
-
-	i = 3;
-	while (i < MAXSTRLEN && isxdigit((unsigned char)(lexeme[i] = getc(tape))))
-		i++;
-	ungetc(lexeme[i], tape);
-	lexeme[i] = 0;
-	return HEX;
-}
-
 int gettoken(FILE *src)
 {
 	int token;
@@ -246,8 +182,6 @@ int gettoken(FILE *src)
 	skipcomments(src); /* já ignora espaços e comentários em sequência */
 
 	if ((token = isID(src))) return token;
-	if ((token = isOCT(src))) return token;
-	if ((token = isHEX(src))) return token;
 	if ((token = isFLT(src))) return token;
 	if ((token = isDEC(src))) return token;
 	if ((token = isASGN(src))) return token;

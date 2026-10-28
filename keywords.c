@@ -24,6 +24,7 @@ char *keywordlist[] =
 	"var",
 	"integer",
 	"real",
+	"double",
 	"boolean",
 	"end",
 };

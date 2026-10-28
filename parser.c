@@ -24,8 +24,6 @@ static const char *token_name(int token)
 		case ID:   return "ID";
 		case DEC:  return "DEC";
 		case FLT:  return "FLT";
-		case OCT:  return "OCT";
-		case HEX:  return "HEX";
 		case ASGN: return "':='";
 		case LEQ:  return "'<='";
 		case NEQ:  return "'<>'";
@@ -70,8 +68,7 @@ static void describe_seen(char *buf, size_t n)
 		snprintf(buf, n, "'>='");
 		return;
 	}
-	if (lookahead == ID || lookahead == DEC || lookahead == FLT ||
-	    lookahead == OCT || lookahead == HEX) {
+	if (lookahead == ID || lookahead == DEC || lookahead == FLT) {
 		snprintf(buf, n, "'%s'", lexeme);
 		return;
 	}
@@ -255,6 +252,9 @@ void type(void)
 		case REAL:
 			match(REAL);
 			break;
+		case DOUBLE:
+			match(DOUBLE);
+			break;
 		default:
 			match(BOOLEAN);
 	}
@@ -325,12 +325,6 @@ _F:
 			break;
 		case DEC:
 			match(DEC);
-			break;
-		case OCT:
-			match(OCT);
-			break;
-		case HEX:
-			match(HEX);
 			break;
 		default:
 			match('(');

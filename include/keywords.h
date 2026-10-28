@@ -28,6 +28,7 @@ enum _KEYWORD_TOKENS {
 	VAR,
 	INTEGER,
 	REAL,
+	DOUBLE,
 	BOOLEAN,
 	END,
 };
