@@ -1,4 +1,4 @@
-CFLAGS = -I./include -g
+CFLAGS = -I$(include) -g
 
 EXEC = mypas
 
