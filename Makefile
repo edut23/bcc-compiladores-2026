@@ -1,8 +1,8 @@
-CFLAGS = -I. -g
+CFLAGS = -I./include -g
 
-EXEC = mybc
+EXEC = mypas
 
-Include = ./include
+include = ./include
 
 $(EXEC): main.o lexer.o parser.o symtab.o keywords.o
 	$(CC) -o $@ $^

@@ -4,7 +4,7 @@
 enum {
 	ID = 1024,
 	DEC,
-	FLT
+	FLT,
 	OCT,
 	HEX,
 	ASGN, // := right-associative assignment

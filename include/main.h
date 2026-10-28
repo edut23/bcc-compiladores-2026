@@ -1,4 +1,3 @@
-// Driver do MyBC.
 #pragma once
 
 #include <stdio.h>

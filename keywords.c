@@ -1,36 +1,41 @@
-/* keywords.c */
-
 #include <string.h>
 #include <keywords.h>
 
-char *keywordList[] = {
-    "begin",
-    "if",
-    "then",
-    "else",
-    "while",
-    "do",
-    "repeat",
-    "until",
-    "not",
-    "or",
-    "div",
-    "mod",
-    "and",
-    "true",
-    "false",
-    "end",
+char *keywordlist[] =
+{
+	"begin",
+	"if",
+	"then",
+	"else",
+	"while",
+	"do",
+	"repeat",
+	"until",
+	"not",
+	"or",
+	"div",
+	"mod",
+	"and",
+	"true",
+	"false",
+	"program",
+	"procedure",
+	"function",
+	"var",
+	"integer",
+	"real",
+	"boolean",
+	"end",
 };
 
-/* sizeof só funciona aqui, onde o array está definido.
- * Se keywordList decaísse para ponteiro, isso daria 1. */
-int keylistLen = (int)(sizeof(keywordList) / sizeof(keywordList[0]));
+int keylistLen = (int)(sizeof(keywordlist) / sizeof(keywordlist[0]));
 
-int isKeyword(const char *identifier) {
-    for (int i = 0; i < keylistLen; i++) {
-        if (strcmp(identifier, keywordList[i]) == 0) {
-            return (long unsigned) keywordList[i];
-        }
-    }
-    return 0;
+long unsigned iskeyword(const char *identifier)
+{
+	for (int i = BEGIN; i <= END; i++) {
+		if (strcmp(keywordlist[i - BEGIN], identifier) == 0) {
+			return i;
+		}
+	}
+	return 0;
 }
