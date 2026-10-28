@@ -115,7 +115,9 @@ void program(void) // checked
 
 void idlist(void) // checked
 {
+	//for each string naming variable or function, it must be inserted into the symbol table avoiding duplicates
 _IDHEAD:
+	//call symtab_append(const char *varname) before match
 	if (has_error)
 		return;
 	match(ID);
@@ -146,6 +148,7 @@ void block(void)
 	while (lookahead == PROCEDURE || lookahead == FUNCTION) {
 		int funcflg = (lookahead == FUNCTION);
 		match(lookahead);
+		// append subprogram name to symbol table regarding the specificity of the subprogram or function
 		match(ID);
 		parmlist();
 		if (funcflg) {
@@ -173,7 +176,7 @@ void parmlist(void)
 		if (lookahead == VAR) {
 			match(VAR);
 		}
-		idlist();
+		idlist(); // os simbolos declarados nesta instancia devm ter offset diferente declarado em block()
 		match(':');
 		type();
 		if (lookahead == ';') {
@@ -196,6 +199,24 @@ _stmt_head:
 	}
 }
 
+void arglist(void)
+{
+	//for each string naming variable or function, it must be inserted into the symbol table avoiding duplicates
+	_EXPRHEAD:
+	//call symtab_append(const char *varname) before match
+	if (has_error)
+		return;
+	if (lookahead == '(') {
+		match('(');
+		expr();
+		if (lookahead == ',') {
+			match(',');
+			goto _EXPRHEAD;
+		}
+		match(')');
+	}
+}
+
 void stmt(void)
 {
 	if (has_error)
@@ -208,7 +229,7 @@ void stmt(void)
 				match(ASGN);
 				expr();
 			} else {
-				parmlist();
+				arglist();
 			}
 			break;
 		case BEGIN:

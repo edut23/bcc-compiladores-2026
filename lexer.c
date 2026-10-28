@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 #include <tokens.h>
 #include <lexer.h>
 #include <parser.h>
@@ -162,12 +163,20 @@ int isRELOP(FILE *tape)
 // NUM = [0-9]+ EE | [0-9]+\.[0-9]* | [0-9]*\.[0-9]+  ___ Transformar para isNum e nele verificar se é inteiro ou float chamando o isUINT dentro dele, usar appendix
 int isFLT(FILE *tape)
 {
-
 	if (isdigit(lexeme[0] = getc(tape))) {
 		double aux;
 		ungetc(lexeme[0], tape);
 		fscanf(tape, "%lg", &aux);
 		sprintf(lexeme, "%lg", aux);
+		int len = strlen(lexeme);
+		for (int i = 0; i < len; i++) {
+			if (lexeme[i] == '.') {
+				return FLT;
+			}
+			if (toupper(lexeme[i]) == 'E') {
+				return FLT;
+			}
+		}
 		return FLT;
 	}
 	ungetc(lexeme[0], tape);
