@@ -49,7 +49,7 @@ fonte (stdin)
 | `keywords.c` / `include/keywords.h` | Palavras-reservadas e `iskeyword()` |
 | `symtab.c` / `include/symtab.h` | Tabela de símbolos (`lookup` / `append`) |
 | `vmachine.c` / `include/vmachine.h` | Acumulador e pilha (ainda não usados no parser) |
-| `include/tokens.h` | `ID`, `DEC`, `FLT`, `OCT`, `HEX`, `ASGN`, `LEQ`, `NEQ`, `GEQ` |
+| `include/tokens.h` | `ID`, `UINT`, `FLT`, `OCT`, `HEX`, `ASGN`, `LEQ`, `NEQ`, `GEQ` |
 
 ---
 
@@ -91,7 +91,7 @@ Ainda **não** entram (constam nos diagramas, mas a aula ainda não chegou): `co
 | ID | `[A-Za-z][A-Za-z0-9]*` (se não for palavra-reservada) | `x`, `soma1` |
 | palavra-reservada | ver `keywords.c` | `program`, `begin`, `div` |
 | FLT | literal numérico via `fscanf("%lg")` | `3.14`, `42` |
-| DEC | `0` ou `[1-9][0-9]*` (fallback; em geral o número já virou FLT) | `0` |
+| UINT | `0` ou `[1-9][0-9]*` (fallback; em geral o número já virou FLT) | `0` |
 | OCT | `0[0-7]+` | `012` |
 | HEX | `0[xX][0-9A-Fa-f]+` | `0xff` |
 | ASGN | `:=` | `b := a` |

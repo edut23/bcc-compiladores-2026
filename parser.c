@@ -22,7 +22,7 @@ static const char *token_name(int token)
 
 	switch (token) {
 		case ID:   return "ID";
-		case DEC:  return "DEC";
+		case UINT:  return "UINT";
 		case FLT:  return "FLT";
 		case ASGN: return "':='";
 		case LEQ:  return "'<='";
@@ -68,7 +68,7 @@ static void describe_seen(char *buf, size_t n)
 		snprintf(buf, n, "'>='");
 		return;
 	}
-	if (lookahead == ID || lookahead == DEC || lookahead == FLT) {
+	if (lookahead == ID || lookahead == UINT || lookahead == FLT) {
 		snprintf(buf, n, "'%s'", lexeme);
 		return;
 	}
@@ -132,7 +132,7 @@ void block(void)
 
 	if (lookahead == VAR) {
 		match(VAR);
-	_block_head:
+	_idlist_head:
 		if (has_error)
 			return;
 		idlist();
@@ -140,7 +140,7 @@ void block(void)
 		type();
 		match(';');
 		if (lookahead == ID) {
-			goto _block_head;
+			goto _idlist_head;
 		}
 	}
 	while (lookahead == PROCEDURE || lookahead == FUNCTION) {
@@ -323,8 +323,8 @@ _F:
 		case FLT:
 			match(FLT);
 			break;
-		case DEC:
-			match(DEC);
+		case UINT:
+			match(UINT);
 			break;
 		default:
 			match('(');

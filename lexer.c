@@ -79,21 +79,21 @@ int isID(FILE *tape)
 	return 0;
 }
 
-// DEC = 0 | [1-9][0-9]*
-int isDEC(FILE *tape)
+// UINT = 0 | [1-9][0-9]*
+int isUINT(FILE *tape)
 {
 	lexeme[0] = getc(tape);
 
 	if (isdigit((unsigned char)lexeme[0])) {
 		if (lexeme[0] == '0') {
 			lexeme[1] = 0;
-			return DEC;
+			return UINT;
 		}
 		int i = 1;
 		while (isdigit((unsigned char)(lexeme[i] = getc(tape)))) i++;
 		ungetc(lexeme[i], tape);
 		lexeme[i] = 0;
-		return DEC;
+		return UINT;
 	}
 
 	ungetc(lexeme[0], tape);
@@ -159,7 +159,7 @@ int isRELOP(FILE *tape)
 	return lexeme[0] = 0;
 }
 
-// NUM = [0-9]+ EE | [0-9]+\.[0-9]* | [0-9]*\.[0-9]+  ___ Transformar para isNum e nele verificar se é inteiro ou float chamando o isDec dentro dele, usar appendix
+// NUM = [0-9]+ EE | [0-9]+\.[0-9]* | [0-9]*\.[0-9]+  ___ Transformar para isNum e nele verificar se é inteiro ou float chamando o isUINT dentro dele, usar appendix
 int isFLT(FILE *tape)
 {
 
@@ -183,7 +183,7 @@ int gettoken(FILE *src)
 
 	if ((token = isID(src))) return token;
 	if ((token = isFLT(src))) return token;
-	if ((token = isDEC(src))) return token;
+	if ((token = isUINT(src))) return token;
 	if ((token = isASGN(src))) return token;
 	if ((token = isRELOP(src))) return token;
 

@@ -3,7 +3,7 @@
 
 enum {
 	ID = 1024,
-	DEC,
+	UINT,
 	FLT,
 	ASGN, // := right-associative assignment
 	LEQ,
