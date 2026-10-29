@@ -217,11 +217,14 @@ void arglist(void)
 	}
 }
 
+int loopcount = 1;
+
 void stmt(void)
 {
 	if (has_error)
 		return;
 
+	int lbl1, lbl2;
 	switch (lookahead) {
 		case ID:
 			match(ID);
@@ -238,26 +241,47 @@ void stmt(void)
 			match(END);
 			break;
 		case IF:
-			match(IF);
-			expr();
+			match(IF); // if head
+			expr(); // <expr.as>
+			/*1*/fprintf(output, "\tjz .L%d\n", lbl1 = lbl2 = loopcount++);/*1*/
 			match(THEN);
-			stmt();
-			if (lookahead == ELSE) {
-				match(ELSE);
-				stmt();
+			stmt(); // <stmt.as>
+			if (lookahead == ELSE) { 
+				/*2*/
+				// jmp .endiflabel
+				fprintf(output, "\tjmp .L%d\n", lbl2 = loopcount++);
+				// .elselabel
+				fprintf(output, ".L%d:\n", lbl1);
+				/*2*/
+				match(ELSE); 
+				stmt(); // <stmt.as>
 			}
+			// .endiflabel
+			/*3*/fprintf(output, ".L%d:\n", lbl2);/*3*/
 			break;
 		case REPEAT:
+			// .repeatlabel
 			match(REPEAT);
-			stmtlist();
+			/*1*/fprintf(output, ".L%d:\n", lbl1 = loopcount++);/*1*/
+			stmtlist(); // <stmt.as>
 			match(UNTIL);
-			expr();
+			expr(); // <expr.as>
+			/*2*/fprintf(output, "\tjz .L%d\n", lbl1);/*2*/
+			// jz .repeatlabel
 			break;
 		case WHILE:
+			// .while
 			match(WHILE);
-			expr();
+			/*1*/fprintf(output, ".L%d:\n", lbl1 = loopcount++);/*1*/
+			expr(); // <expr.as>
+			// jz .endwhile
+			/*2*/fprintf(output, "\tjz .L%d\n", lbl2 = loopcount++);/*2*/
 			match(DO);
-			stmt();
+			stmt(); // <stmt.as>
+			// jmp .while
+			/*3*/fprintf(output, "\tjmp .L%d\n", lbl1);/*3*/
+			// .endwhile
+			/*4*/fprintf(output, ".L%d:\n", lbl2);/*4*/
 			break;
 		default:
 			; // empty statement

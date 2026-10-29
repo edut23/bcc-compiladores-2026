@@ -11,6 +11,8 @@ extern void type(void);
 extern void parmlist(void);
 extern void stmtlist(void);
 extern void stmt(void);
+extern void arglist(void);
+extern int loopcount;
 
 extern FILE *source;
 extern FILE *output; // object code
