@@ -62,7 +62,7 @@ int isID(FILE *tape)
 {
 	if (isalpha((lexeme[0] = getc(tape)))) {
 		int i = 1;
-		while (isalnum(lexeme[i] = getc(tape))) {
+		while (isalnum(lexeme[i] = getc(tape)) || lexeme[i] == '_') {
 			if (i < MAXSTRLEN)
 				i++;
 		}

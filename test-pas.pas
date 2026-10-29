@@ -1,4 +1,4 @@
-program testpas(input, output);
+program test_pas(input, output);
 var a, b: integer;
 begin
 	if a = b then
