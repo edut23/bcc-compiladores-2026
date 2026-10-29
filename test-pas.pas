@@ -10,7 +10,3 @@ begin
 end.
 
 {Tudo que vier depois do ponto é comentário}
-
-dhfkshfkjsfh sdfhskjdfh lskadjfhs kdjahf askldjfh 
-hfkashdflkhsfklhsdlkfhasf
-sadfsahdfga asfdh asdjkfsad jkl 
