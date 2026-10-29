@@ -1,10 +1,10 @@
-program test_pas(input, output);
+program testpas(input, output);
 var a, b: integer;
 begin
 	if a = b then
 		a := a + b
 	else
-		b : b - a;
+		b := b - a;
 	while a + b >= 0 do
 		a := -b
 end.
