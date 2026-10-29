@@ -6,9 +6,17 @@
 
 FILE *source, *output;
 
-int main(void)
+int main(int argc, char const *argv[])
 {
-	source = stdin;
+	if (argc > 1) {
+		source = fopen(argv[1], "r");
+		if (source == NULL) {
+			fprintf(stderr, "Erro ao abrir o arquivo de entrada\n");
+			return 1;
+		}
+	} else {
+		source = stdin;
+	}
 	output = stdout;
 
 	lookahead = gettoken(source);
