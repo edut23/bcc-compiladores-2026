@@ -5,6 +5,7 @@ compile_flags.txt
 *.kdev4
 mybc
 mypas
+a.out
 gpgtoken.txt
 FULL_DETAILED.md
 FULL_DETAILED.MD

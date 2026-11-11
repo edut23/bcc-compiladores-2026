@@ -160,8 +160,8 @@ int isRELOP(FILE *tape)
 	return lexeme[0] = 0;
 }
 
-// NUM = [0-9]+ EE | [0-9]+\.[0-9]* | [0-9]*\.[0-9]+  ___ Transformar para isNum e nele verificar se é inteiro ou float chamando o isUINT dentro dele, usar appendix
-int isFLT(FILE *tape)
+/* NUM: lê com %lg e classifica UINT (sem . / E) ou FLT. */
+int isNUM(FILE *tape)
 {
 	if (isdigit(lexeme[0] = getc(tape))) {
 		double aux;
@@ -177,7 +177,7 @@ int isFLT(FILE *tape)
 				return FLT;
 			}
 		}
-		return FLT;
+		return UINT;
 	}
 	ungetc(lexeme[0], tape);
 	lexeme[0] = 0;
@@ -191,8 +191,8 @@ int gettoken(FILE *src)
 	skipcomments(src); /* já ignora espaços e comentários em sequência */
 
 	if ((token = isID(src))) return token;
-	if ((token = isFLT(src))) return token;
-	if ((token = isUINT(src))) return token;
+	if ((token = isNUM(src))) return token;
+	if ((token = isUINT(src))) return token; /* fallback (números já caem em isNUM) */
 	if ((token = isASGN(src))) return token;
 	if ((token = isRELOP(src))) return token;
 

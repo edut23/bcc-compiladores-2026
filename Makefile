@@ -15,4 +15,4 @@ clean:
 	$(RM) *.o
 
 mostlyclean: clean
-	$(RM) *~ $(EXEC) test-iskeyword
+	$(RM) *~ $(EXEC) test-iskeyword a.out

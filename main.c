@@ -4,23 +4,43 @@
 #include <parser.h>
 #include <main.h>
 
-FILE *source, *output;
+FILE *targetfile, *objfile;
 
 int main(int argc, char const *argv[])
 {
+	const char *inputfname = NULL;
+	const char *outputfname = "a.out";
+
 	if (argc > 1) {
-		source = fopen(argv[1], "r");
-		if (source == NULL) {
-			fprintf(stderr, "Erro ao abrir o arquivo de entrada\n");
+		inputfname = argv[1];
+		targetfile = fopen(inputfname, "r");
+		if (!targetfile) {
+			fprintf(stderr, "file %s not found. Exiting with error status.\n",
+				inputfname);
 			return 1;
 		}
 	} else {
-		source = stdin;
+		targetfile = stdin;
 	}
-	output = stdout;
 
-	lookahead = gettoken(source);
+	if (argc > 2)
+		outputfname = argv[2];
+
+	objfile = fopen(outputfname, "w");
+	if (!objfile) {
+		fprintf(stderr, "cannot open output file %s. Exiting with error status.\n",
+			outputfname);
+		if (targetfile != stdin)
+			fclose(targetfile);
+		return 1;
+	}
+
+	lookahead = gettoken(targetfile);
 	program();
+
+	fclose(objfile);
+	if (targetfile != stdin)
+		fclose(targetfile);
 
 	return 0;
 }

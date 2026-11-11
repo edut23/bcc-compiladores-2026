@@ -14,8 +14,8 @@ extern void stmt(void);
 extern void arglist(void);
 extern int loopcount;
 
-extern FILE *source;
-extern FILE *output; // object code
+extern FILE *targetfile;
+extern FILE *objfile; // object code
 
 extern int lookahead;
 extern int has_error;

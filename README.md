@@ -1,6 +1,6 @@
 # MyPas
 
-Compilador Pascal da disciplina de **Compiladores**. Nesta etapa o foco é a análise léxica e o parser LL(1) da sintaxe (diagramas de Grogono). A geração de código ainda não está ligada: o programa é reconhecido ou rejeitado, sem emitir objeto.
+Compilador Pascal da disciplina de **Compiladores**. Nesta etapa o foco é a análise léxica, o parser LL(1) da sintaxe (diagramas de Grogono) e o **início da geração de código** x86 (AT&T) para expressões, atribuição e controle (`IF` / `WHILE` / `REPEAT`).
 
 O executável chama-se `mypas`. Os cabeçalhos ficam em `include/`.
 
@@ -11,19 +11,21 @@ O executável chama-se `mypas`. Os cabeçalhos ficam em `include/`.
 ```bash
 make              # gera ./mypas
 make clean        # remove .o
-make mostlyclean  # remove .o e o executável
+make mostlyclean  # remove .o, executável e a.out
 make test-iskeyword
 ```
 
-A entrada é a **stdin**.
+### Uso
 
 ```bash
-./mypas < test-pas.pas
+./mypas entrada.pas            # objeto em a.out
+./mypas entrada.pas saida.s    # objeto no 2º argumento
+./mypas < entrada.pas          # lê stdin; objeto em a.out
 ```
 
 | Fluxo | Destino |
 |-------|---------|
-| código objeto (ainda não emitido) | **stdout** (`output`) |
+| código objeto (assembly) | arquivo `a.out` ou o 2º argumento (`objfile`) |
 | diagnóstico de erro | **stderr** |
 
 O processo **não** chama `exit` no primeiro erro de sintaxe: `match()` marca `has_error`, imprime o diagnóstico e as funções do parser retornam. O programa só encerra no fim de `program()`, com status `0`.
@@ -33,23 +35,24 @@ O processo **não** chama `exit` no primeiro erro de sintaxe: `match()` marca `h
 ## Arquitetura
 
 ```
-fonte (stdin)
-    → gettoken()          lexer.c
-    → lookahead / match() parser.c
-    → program()           parser.c  (sintaxe Pascal)
-         └─ (futuro)      symtab.c + vmachine.c
+fonte (arquivo ou stdin)          → targetfile
+    → gettoken()                  lexer.c
+    → lookahead / match()         parser.c
+    → program()                   parser.c
+         ├─ labels IF/WHILE/REPEAT
+         └─ movl / pushl / ops    → objfile (a.out ou argv[2])
     → stderr (erro) ou silêncio se a sintaxe estiver ok
 ```
 
 | Arquivo | Papel |
 |---------|--------|
-| `main.c` | Abre stdin/stdout, lê o 1º token e chama `program()` |
-| `lexer.c` / `include/lexer.h` | Tokens, `lexeme[]`, comentários `{...}`, contador `line` |
-| `parser.c` / `include/parser.h` | Parser LL(1) MyPas, `match()`, `has_error` |
+| `main.c` | Abre `targetfile` / `objfile`, lê o 1º token e chama `program()` |
+| `lexer.c` / `include/lexer.h` | Tokens, `lexeme[]`, comentários `{...}`, contador `line`, `isNUM` |
+| `parser.c` / `include/parser.h` | Parser LL(1) MyPas + emissão de assembly |
 | `keywords.c` / `include/keywords.h` | Palavras-reservadas e `iskeyword()` |
-| `symtab.c` / `include/symtab.h` | Tabela de símbolos (`lookup` / `append`) |
-| `vmachine.c` / `include/vmachine.h` | Acumulador e pilha (ainda não usados no parser) |
-| `include/tokens.h` | `ID`, `UINT`, `FLT`, `OCT`, `HEX`, `ASGN`, `LEQ`, `NEQ`, `GEQ` |
+| `symtab.c` / `include/symtab.h` | Tabela de símbolos (`lookup` / `append`) — ainda pouco usada |
+| `vmachine.c` / `include/vmachine.h` | Acumulador e pilha (ainda não linkados no Makefile) |
+| `include/tokens.h` | `ID`, `UINT`, `FLT`, `ASGN`, `LEQ`, `NEQ`, `GEQ` |
 
 ---
 
@@ -63,13 +66,13 @@ block    → [ VAR idlist : type ; { idlist : type ; } ]
            BEGIN stmtlist END
 parmlist → [ ( [VAR] idlist : type { ; [VAR] idlist : type } ) ]
 stmtlist → stmt { ; stmt }
-stmt     → ID [ := expr | parmlist ]
+stmt     → ID [ := expr | arglist ]
          | BEGIN stmtlist END
          | IF expr THEN stmt [ ELSE stmt ]
          | REPEAT stmtlist UNTIL expr
          | WHILE expr DO stmt
          | ε
-type     → INTEGER | REAL | BOOLEAN
+type     → INTEGER | REAL | DOUBLE | BOOLEAN
 expr     → smpexpr [ relop smpexpr ]
 smpexpr  → [ + | - ] factor { ( * | / | DIV | MOD | AND ) factor } { ( + | - ) term }
 relop    → < | <= | <> | > | >= | =
@@ -88,40 +91,45 @@ Ainda **não** entram (constam nos diagramas, mas a aula ainda não chegou): `co
 
 | Token | Forma | Exemplo |
 |--------|--------|---------|
-| ID | `[A-Za-z][A-Za-z0-9]*` (se não for palavra-reservada) | `x`, `soma1` |
+| ID | `[A-Za-z][A-Za-z0-9_]*` (se não for palavra-reservada) | `x`, `soma1` |
 | palavra-reservada | ver `keywords.c` | `program`, `begin`, `div` |
-| FLT | literal numérico via `fscanf("%lg")` | `3.14`, `42` |
-| UINT | `0` ou `[1-9][0-9]*` (fallback; em geral o número já virou FLT) | `0` |
-| OCT | `0[0-7]+` | `012` |
-| HEX | `0[xX][0-9A-Fa-f]+` | `0xff` |
+| UINT | literal numérico sem `.` / `E` (`isNUM`) | `42` |
+| FLT | literal com `.` ou expoente | `3.14`, `1e3` |
 | ASGN | `:=` | `b := a` |
 | LEQ / NEQ / GEQ | `<=` `<>` `>=` | `a <= b` |
 | operadores | `+ - * / ( ) < > =` | — |
 | delimitadores | `,` `:` `;` `.` | — |
 
-OCT e HEX são tentados **antes** de FLT, senão `012` e `0xff` virariam um float.
+### Geração de código (etapa atual)
+
+- Expressões: resultado em `%eax`; operandos esquerdos via `pushl` / pilha.
+- Relacionais: `cmpl` + `setcc` → `0`/`1` em `%eax` (serve para o `jz` de `IF`/`WHILE`/`REPEAT`).
+- Atribuição: `movl %eax, var` após `expr`.
+- Controle: rótulos `.Ln` e saltos `jz` / `jmp` (`loopcount`).
+
+O assembly emitido ainda **não** é um programa linkável completo (faltam diretivas, seção de dados, `main`, etc.): é o esqueleto da aula.
 
 ---
 
 ## Erros na linha de comando
 
-Todas as mensagens vão para **stderr**, com o número da linha. O token visto é o lexema (ou a palavra-reservada), não o código interno (`1024`, `2048`, …).
+Todas as mensagens vão para **stderr**, com o número da linha. O token visto é o lexema (ou a palavra-reservada), não o código interno (`1024`, `0x10000`, …).
 
 | Situação | Mensagem (stderr) |
 |----------|-------------------|
 | token errado (`program 1;` , falta `)`) | `token inesperado '...' na linha N (esperado ...)` |
 | fim de arquivo no meio do programa | `EOF prematuro na linha N (esperado ...)` |
 | `{` sem `}` até o EOF | `comentário não fechado na linha N` |
+| arquivo de entrada inexistente | `file ... not found. Exiting with error status.` |
+| não abre o arquivo de saída | `cannot open output file ...` |
 
 ```bash
-printf 'program p(input, output);\nbegin\nend.\n' | ./mypas
-# silêncio: sintaxe ok
+./mypas test-pas.pas out.s
+# silêncio + out.s com assembly se a sintaxe estiver ok
 
 printf 'begin end.\n' | ./mypas
 # stderr: token inesperado begin na linha 1 (esperado program)
 ```
-
-O `test-pas.pas` da aula tem `b := a**2`. `**` não existe na gramática: o parser lê `a *` e depois espera um fator, não outro `*`. Para um programa válido use `b := a * a`.
 
 ---
 

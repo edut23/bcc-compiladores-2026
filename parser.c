@@ -85,7 +85,7 @@ void match(int required)
 		return;
 
 	if (lookahead == required) {
-		lookahead = gettoken(source);
+		lookahead = gettoken(targetfile);
 		return;
 	}
 
@@ -225,12 +225,17 @@ void stmt(void)
 		return;
 
 	int lbl1, lbl2;
+	char name[MAXSTRLEN+1];
+
 	switch (lookahead) {
 		case ID:
+			strncpy(name, lexeme, MAXSTRLEN);
+			name[MAXSTRLEN] = 0;
 			match(ID);
 			if (lookahead == ASGN) {
 				match(ASGN);
 				expr();
+				fprintf(objfile, "\tmovl %%eax, %s\n", name);
 			} else {
 				arglist();
 			}
@@ -243,45 +248,45 @@ void stmt(void)
 		case IF:
 			match(IF); // if head
 			expr(); // <expr.as>
-			/*1*/fprintf(output, "\tjz .L%d\n", lbl1 = lbl2 = loopcount++);/*1*/
+			/*1*/fprintf(objfile, "\tjz .L%d\n", lbl1 = lbl2 = loopcount++);/*1*/
 			match(THEN);
 			stmt(); // <stmt.as>
-			if (lookahead == ELSE) { 
+			if (lookahead == ELSE) {
 				/*2*/
 				// jmp .endiflabel
-				fprintf(output, "\tjmp .L%d\n", lbl2 = loopcount++);
+				fprintf(objfile, "\tjmp .L%d\n", lbl2 = loopcount++);
 				// .elselabel
-				fprintf(output, ".L%d:\n", lbl1);
+				fprintf(objfile, ".L%d:\n", lbl1);
 				/*2*/
-				match(ELSE); 
+				match(ELSE);
 				stmt(); // <stmt.as>
 			}
 			// .endiflabel
-			/*3*/fprintf(output, ".L%d:\n", lbl2);/*3*/
+			/*3*/fprintf(objfile, ".L%d:\n", lbl2);/*3*/
 			break;
 		case REPEAT:
 			// .repeatlabel
 			match(REPEAT);
-			/*1*/fprintf(output, ".L%d:\n", lbl1 = loopcount++);/*1*/
+			/*1*/fprintf(objfile, ".L%d:\n", lbl1 = loopcount++);/*1*/
 			stmtlist(); // <stmt.as>
 			match(UNTIL);
 			expr(); // <expr.as>
-			/*2*/fprintf(output, "\tjz .L%d\n", lbl1);/*2*/
+			/*2*/fprintf(objfile, "\tjz .L%d\n", lbl1);/*2*/
 			// jz .repeatlabel
 			break;
 		case WHILE:
 			// .while
 			match(WHILE);
-			/*1*/fprintf(output, ".L%d:\n", lbl1 = loopcount++);/*1*/
+			/*1*/fprintf(objfile, ".L%d:\n", lbl1 = loopcount++);/*1*/
 			expr(); // <expr.as>
 			// jz .endwhile
-			/*2*/fprintf(output, "\tjz .L%d\n", lbl2 = loopcount++);/*2*/
+			/*2*/fprintf(objfile, "\tjz .L%d\n", lbl2 = loopcount++);/*2*/
 			match(DO);
 			stmt(); // <stmt.as>
 			// jmp .while
-			/*3*/fprintf(output, "\tjmp .L%d\n", lbl1);/*3*/
+			/*3*/fprintf(objfile, "\tjmp .L%d\n", lbl1);/*3*/
 			// .endwhile
-			/*4*/fprintf(output, ".L%d:\n", lbl2);/*4*/
+			/*4*/fprintf(objfile, ".L%d:\n", lbl2);/*4*/
 			break;
 		default:
 			; // empty statement
@@ -321,12 +326,27 @@ int isrelop(void)
 
 void expr(void) // expr types must be numerical or boolean
 {
+	int rel;
+
 	if (has_error)
 		return;
 	smpexpr();
-	if (isrelop()) {
+	if ((rel = isrelop())) {
+		fprintf(objfile, "\tpushl %%eax\n");
 		match(lookahead);
 		smpexpr();
+		/* left in (%esp) / after popl %ebx; right in %eax → 0/1 em %eax p/ jz */
+		fprintf(objfile, "\tpopl %%ebx\n");
+		fprintf(objfile, "\tcmpl %%eax, %%ebx\n");
+		fprintf(objfile, "\tmovl $0, %%eax\n");
+		switch (rel) {
+			case '=':  fprintf(objfile, "\tsete %%al\n"); break;
+			case NEQ:  fprintf(objfile, "\tsetne %%al\n"); break;
+			case '<':  fprintf(objfile, "\tsetl %%al\n"); break;
+			case LEQ:  fprintf(objfile, "\tsetle %%al\n"); break;
+			case '>':  fprintf(objfile, "\tsetg %%al\n"); break;
+			case GEQ:  fprintf(objfile, "\tsetge %%al\n"); break;
+		}
 	}
 }
 
@@ -338,12 +358,60 @@ int isotimes(void)
 	return 0;
 }
 
+static void apply_otimes(int op)
+{
+	switch (op) {
+		case '*':
+			fprintf(objfile, "\timull (%%esp), %%eax\n");
+			fprintf(objfile, "\taddl $4, %%esp\n");
+			break;
+		case '/':
+		case DIV:
+			fprintf(objfile, "\tmovl %%eax, %%ebx\n");
+			fprintf(objfile, "\tpopl %%eax\n");
+			fprintf(objfile, "\tcltd\n");
+			fprintf(objfile, "\tidivl %%ebx\n");
+			break;
+		case MOD:
+			fprintf(objfile, "\tmovl %%eax, %%ebx\n");
+			fprintf(objfile, "\tpopl %%eax\n");
+			fprintf(objfile, "\tcltd\n");
+			fprintf(objfile, "\tidivl %%ebx\n");
+			fprintf(objfile, "\tmovl %%edx, %%eax\n");
+			break;
+		case AND:
+			fprintf(objfile, "\tandl (%%esp), %%eax\n");
+			fprintf(objfile, "\taddl $4, %%esp\n");
+			break;
+	}
+}
+
+static void apply_oplus(int op)
+{
+	switch (op) {
+		case '+':
+			fprintf(objfile, "\taddl (%%esp), %%eax\n");
+			fprintf(objfile, "\taddl $4, %%esp\n");
+			break;
+		case '-':
+			fprintf(objfile, "\tmovl %%eax, %%ebx\n");
+			fprintf(objfile, "\tpopl %%eax\n");
+			fprintf(objfile, "\tsubl %%ebx, %%eax\n");
+			break;
+	}
+}
+
 void smpexpr(void)
 {
+	int otimesflg = 0, oplusflg = 0;
+	int unary = 0;
+	char name[MAXSTRLEN+1];
+
 	if (has_error)
 		return;
 
 	if (lookahead == '+' || lookahead == '-') {
+		unary = lookahead;
 		match(lookahead);
 	}
 
@@ -356,19 +424,24 @@ _F:
 
 	switch (lookahead) {
 		case ID:
+			strncpy(name, lexeme, MAXSTRLEN);
+			name[MAXSTRLEN] = 0;
 			match(ID); // ID is associated to a R-value or L-value variable
 			if (lookahead == ASGN) {
 				// ID := E -> L-value
 				match(ASGN);
 				expr();
+				fprintf(objfile, "\tmovl %%eax, %s\n", name);
 			} else {
-				// R-value
+				fprintf(objfile, "\tmovl %s, %%eax\n", name);
 			}
 			break;
 		case FLT:
+			fprintf(objfile, "\tmovl $%s, %%eax\n", lexeme);
 			match(FLT);
 			break;
 		case UINT:
+			fprintf(objfile, "\tmovl $%s, %%eax\n", lexeme);
 			match(UINT);
 			break;
 		default:
@@ -377,14 +450,34 @@ _F:
 			match(')');
 	}
 
+	if (unary == '-') {
+		fprintf(objfile, "\tnegl %%eax\n");
+		unary = 0;
+	} else if (unary == '+') {
+		unary = 0;
+	}
+
+	if (otimesflg) {
+		apply_otimes(otimesflg);
+		otimesflg = 0;
+	}
+
 	if (isotimes()) {
+		fprintf(objfile, "\tpushl %%eax\n");
+		otimesflg = lookahead;
 		match(lookahead);
 		goto _F;
 	}
 
 	// term ends here
+	if (oplusflg) {
+		apply_oplus(oplusflg);
+		oplusflg = 0;
+	}
 
 	if (lookahead == '+' || lookahead == '-') {
+		fprintf(objfile, "\tpushl %%eax\n");
+		oplusflg = lookahead;
 		match(lookahead);
 		goto _T;
 	}
