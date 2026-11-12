@@ -13,7 +13,7 @@ double vmem[SYMTABSIZE];
 int symtab_lookup(const char *varname)
 {
 	int i;
-	for (i = 0; i < symtab_nextentry; i++) {
+	for (i = symtab_nextentry - 1; i > -1; i--) {
 		if (strcmp(symtab[i].name, varname) == 0) {
 			return i;
 		}
@@ -31,6 +31,20 @@ int symtab_append(const char *varname)
 		return -1; // symtab overflow
 	}
 	return found;
+}
+
+void symtab_release(void)
+{
+	symtab_nextentry = upper_bound[lexlevel];
+}
+
+void symtab_batch(int type)
+{
+	int i;
+	for (i = upper_bound[lexlevel]; i < symtab_nextentry; i++) {
+		symtab[i].type = type;
+		// offset for each must be here too
+	}
 }
 
 void store(char *name, double val)

@@ -10,8 +10,11 @@
 #include <symtab.h>
 #include <keywords.h>
 
+// lookahead is the compiler's eyes on the input stream
 int lookahead;
 int has_error = 0;
+int upper_bound[MAX_LEXICAL_LEVEL];
+int lexlevel = 0;
 
 static const char *token_name(int token)
 {
@@ -105,11 +108,19 @@ void program(void) // checked
 {
 	match(PROGRAM);
 	match(ID);
+	/**/
+	lexlevel++;
+	upper_bound[lexlevel] = symtab_nextentry;
+	/**/
 	match('(');
 	idlist(); // ok
 	match(')');
 	match(';');
 	block();
+	/**/
+	symtab_release();
+	lexlevel--;
+	/**/
 	match('.');
 }
 
@@ -120,6 +131,7 @@ _IDHEAD:
 	//call symtab_append(const char *varname) before match
 	if (has_error)
 		return;
+	symtab_append(lexeme);
 	match(ID);
 	if (lookahead == ',') {
 		match(',');
@@ -132,24 +144,33 @@ void block(void)
 	if (has_error)
 		return;
 
+	int batch_type;
 	if (lookahead == VAR) {
 		match(VAR);
 	_idlist_head:
 		if (has_error)
 			return;
+		// idlist runs from upper_bound[lexlevel] through symtab_nextentry - 1
 		idlist();
 		match(':');
-		type();
+		/**/
+		batch_type = type();
+		symtab_batch(batch_type);
+		/**/
 		match(';');
 		if (lookahead == ID) {
 			goto _idlist_head;
 		}
 	}
-	while (lookahead == PROCEDURE || lookahead == FUNCTION) {
+	while (lookahead == PROCEDURE || lookahead == FUNCTION) {	/**/
 		int funcflg = (lookahead == FUNCTION);
 		match(lookahead);
 		// append subprogram name to symbol table regarding the specificity of the subprogram or function
 		match(ID);
+		/**/
+		lexlevel++;
+		upper_bound[lexlevel] = symtab_nextentry;
+		/**/
 		parmlist();
 		if (funcflg) {
 			match(':');
@@ -157,6 +178,10 @@ void block(void)
 		}
 		match(';');
 		block();
+		/**/
+		symtab_release();
+		lexlevel--;
+		/**/
 		match(';');
 		if (has_error)
 			return;
@@ -293,8 +318,9 @@ void stmt(void)
 	}
 }
 
-void type(void)
+int type(void)
 {
+	int return_type = lookahead;
 	switch (lookahead) {
 		case INTEGER:
 			match(INTEGER);
@@ -308,6 +334,7 @@ void type(void)
 		default:
 			match(BOOLEAN);
 	}
+	return return_type;
 }
 
 int isrelop(void)
@@ -322,32 +349,6 @@ int isrelop(void)
 			return lookahead;
 	}
 	return 0;
-}
-
-void expr(void) // expr types must be numerical or boolean
-{
-	int rel;
-
-	if (has_error)
-		return;
-	smpexpr();
-	if ((rel = isrelop())) {
-		fprintf(objfile, "\tpushl %%eax\n");
-		match(lookahead);
-		smpexpr();
-		/* left in (%esp) / after popl %ebx; right in %eax → 0/1 em %eax p/ jz */
-		fprintf(objfile, "\tpopl %%ebx\n");
-		fprintf(objfile, "\tcmpl %%eax, %%ebx\n");
-		fprintf(objfile, "\tmovl $0, %%eax\n");
-		switch (rel) {
-			case '=':  fprintf(objfile, "\tsete %%al\n"); break;
-			case NEQ:  fprintf(objfile, "\tsetne %%al\n"); break;
-			case '<':  fprintf(objfile, "\tsetl %%al\n"); break;
-			case LEQ:  fprintf(objfile, "\tsetle %%al\n"); break;
-			case '>':  fprintf(objfile, "\tsetg %%al\n"); break;
-			case GEQ:  fprintf(objfile, "\tsetge %%al\n"); break;
-		}
-	}
 }
 
 int isotimes(void)
@@ -401,11 +402,40 @@ static void apply_oplus(int op)
 	}
 }
 
-void smpexpr(void)
+int expr(int inherited) // expr types must be numerical or boolean
 {
+	int rel;
+
+	if (has_error)
+		return;
+	int left_type = smpexpr(inherited);
+	if ((rel = isrelop())) {
+		fprintf(objfile, "\tpushl %%eax\n");
+		match(lookahead);
+		int right_type = smpexpr(inherited);
+		/* left in (%esp) / after popl %ebx; right in %eax → 0/1 em %eax p/ jz */
+		fprintf(objfile, "\tpopl %%ebx\n");
+		fprintf(objfile, "\tcmpl %%eax, %%ebx\n");
+		fprintf(objfile, "\tmovl $0, %%eax\n");
+		// if(iscompatible(left_type, right_type)) to be implemented
+		switch (rel) {
+			case '=':  fprintf(objfile, "\tsete %%al\n"); break;
+			case NEQ:  fprintf(objfile, "\tsetne %%al\n"); break;
+			case '<':  fprintf(objfile, "\tsetl %%al\n"); break;
+			case LEQ:  fprintf(objfile, "\tsetle %%al\n"); break;
+			case '>':  fprintf(objfile, "\tsetg %%al\n"); break;
+			case GEQ:  fprintf(objfile, "\tsetge %%al\n"); break;
+		}
+	}
+}
+
+int smpexpr(int inherited)
+{
+	/*[[0]]*/
 	int otimesflg = 0, oplusflg = 0;
 	int unary = 0;
 	char name[MAXSTRLEN+1];
+	/*[[0]]*/
 
 	if (has_error)
 		return;
@@ -424,6 +454,7 @@ _F:
 
 	switch (lookahead) {
 		case ID:
+			/*[[1]]*/
 			strncpy(name, lexeme, MAXSTRLEN);
 			name[MAXSTRLEN] = 0;
 			match(ID); // ID is associated to a R-value or L-value variable
