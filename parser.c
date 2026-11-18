@@ -233,7 +233,7 @@ void arglist(void)
 		return;
 	if (lookahead == '(') {
 		match('(');
-		expr();
+		expr(TYPE_VOID);
 		if (lookahead == ',') {
 			match(',');
 			goto _EXPRHEAD;
@@ -253,18 +253,39 @@ void stmt(void)
 	char name[MAXSTRLEN+1];
 
 	switch (lookahead) {
-		case ID:
+		case ID: {
+			int lhs_type = TYPE_VOID;
+			int idx;
+
 			strncpy(name, lexeme, MAXSTRLEN);
 			name[MAXSTRLEN] = 0;
 			match(ID);
+			idx = symtab_lookup(name);
+			if (idx >= 0)
+				lhs_type = symtab[idx].type;
+			else
+				fprintf(stderr,
+					"erro semantico na linha %d: identificador '%s' nao declarado\n",
+					line, name);
 			if (lookahead == ASGN) {
+				int rhs_type;
+				int merged;
+
 				match(ASGN);
-				expr();
+				rhs_type = expr(TYPE_VOID);
+				merged = iscompat(lhs_type, rhs_type);
+				/* atribuição: o lub deve permanecer o tipo do LHS */
+				if (lhs_type && merged && merged != lhs_type) {
+					fprintf(stderr,
+						"erro semantico na linha %d: incompatibilidade de tipos em atribuicao\n",
+						line);
+				}
 				fprintf(objfile, "\tmovl %%eax, %s\n", name);
 			} else {
 				arglist();
 			}
 			break;
+		}
 		case BEGIN:
 			match(BEGIN);
 			stmtlist();
@@ -272,7 +293,7 @@ void stmt(void)
 			break;
 		case IF:
 			match(IF); // if head
-			expr(); // <expr.as>
+			expr(TYPE_VOID); // <expr.as>
 			/*1*/fprintf(objfile, "\tjz .L%d\n", lbl1 = lbl2 = loopcount++);/*1*/
 			match(THEN);
 			stmt(); // <stmt.as>
@@ -295,7 +316,7 @@ void stmt(void)
 			/*1*/fprintf(objfile, ".L%d:\n", lbl1 = loopcount++);/*1*/
 			stmtlist(); // <stmt.as>
 			match(UNTIL);
-			expr(); // <expr.as>
+			expr(TYPE_VOID); // <expr.as>
 			/*2*/fprintf(objfile, "\tjz .L%d\n", lbl1);/*2*/
 			// jz .repeatlabel
 			break;
@@ -303,7 +324,7 @@ void stmt(void)
 			// .while
 			match(WHILE);
 			/*1*/fprintf(objfile, ".L%d:\n", lbl1 = loopcount++);/*1*/
-			expr(); // <expr.as>
+			expr(TYPE_VOID); // <expr.as>
 			// jz .endwhile
 			/*2*/fprintf(objfile, "\tjz .L%d\n", lbl2 = loopcount++);/*2*/
 			match(DO);
@@ -320,21 +341,63 @@ void stmt(void)
 
 int type(void)
 {
-	int return_type = lookahead;
+	int return_type;
+
 	switch (lookahead) {
 		case INTEGER:
 			match(INTEGER);
+			return_type = TYPE_INT64;
 			break;
 		case REAL:
 			match(REAL);
+			return_type = TYPE_FLT32;
 			break;
 		case DOUBLE:
 			match(DOUBLE);
+			return_type = TYPE_FLT64;
 			break;
 		default:
 			match(BOOLEAN);
+			return_type = TYPE_BOOLEAN;
+			break;
 	}
 	return return_type;
+}
+
+int iscompat(int acctype, int newtype)
+{
+	int a, b;
+
+	if (acctype == 0 || acctype == TYPE_VOID)
+		return newtype;
+	if (newtype == 0 || newtype == TYPE_VOID)
+		return acctype;
+	if (acctype == newtype)
+		return acctype;
+
+	a = acctype;
+	b = newtype;
+	if (a > b) {
+		int tmp = a;
+		a = b;
+		b = tmp;
+	}
+
+	/* INT32/INT64 promote to INT64 */
+	if (a == TYPE_INT32 && b == TYPE_INT64)
+		return TYPE_INT64;
+	/* FLT32/FLT64 promote to FLT64 */
+	if (a == TYPE_FLT32 && b == TYPE_FLT64)
+		return TYPE_FLT64;
+	/* any INT* with FLT* → the float */
+	if ((a == TYPE_INT32 || a == TYPE_INT64) &&
+	    (b == TYPE_FLT32 || b == TYPE_FLT64))
+		return b;
+	/* BOOLEAN only with BOOLEAN (already handled by equality) */
+	fprintf(stderr,
+		"erro semantico na linha %d: incompatibilidade de tipos (%d vs %d)\n",
+		line, acctype, newtype);
+	return 0;
 }
 
 int isrelop(void)
@@ -405,19 +468,22 @@ static void apply_oplus(int op)
 int expr(int inherited) // expr types must be numerical or boolean
 {
 	int rel;
+	int left_type;
+	int right_type;
 
 	if (has_error)
-		return;
-	int left_type = smpexpr(inherited);
+		return 0;
+	left_type = smpexpr(inherited);
 	if ((rel = isrelop())) {
 		fprintf(objfile, "\tpushl %%eax\n");
 		match(lookahead);
-		int right_type = smpexpr(inherited);
+		right_type = smpexpr(inherited);
 		/* left in (%esp) / after popl %ebx; right in %eax → 0/1 em %eax p/ jz */
 		fprintf(objfile, "\tpopl %%ebx\n");
 		fprintf(objfile, "\tcmpl %%eax, %%ebx\n");
 		fprintf(objfile, "\tmovl $0, %%eax\n");
-		// if(iscompatible(left_type, right_type)) to be implemented
+		if (!iscompat(left_type, right_type))
+			return 0;
 		switch (rel) {
 			case '=':  fprintf(objfile, "\tsete %%al\n"); break;
 			case NEQ:  fprintf(objfile, "\tsetne %%al\n"); break;
@@ -426,19 +492,25 @@ int expr(int inherited) // expr types must be numerical or boolean
 			case '>':  fprintf(objfile, "\tsetg %%al\n"); break;
 			case GEQ:  fprintf(objfile, "\tsetge %%al\n"); break;
 		}
+		return TYPE_BOOLEAN;
 	}
+	return left_type;
 }
 
-int smpexpr(int inherited)
+int smpexpr(int acctype)
 {
 	/*[[0]]*/
 	int otimesflg = 0, oplusflg = 0;
 	int unary = 0;
 	char name[MAXSTRLEN+1];
+	int newtype = TYPE_VOID;
+
+	if (acctype == 0)
+		acctype = TYPE_VOID;
 	/*[[0]]*/
 
 	if (has_error)
-		return;
+		return 0;
 
 	if (lookahead == '+' || lookahead == '-') {
 		unary = lookahead;
@@ -447,38 +519,74 @@ int smpexpr(int inherited)
 
 _T:
 	if (has_error)
-		return;
+		return 0;
 _F:
 	if (has_error)
-		return;
+		return 0;
 
+	newtype = TYPE_VOID;
 	switch (lookahead) {
-		case ID:
+		case ID: {
+			int idx;
+			int lhs_type;
+
 			/*[[1]]*/
 			strncpy(name, lexeme, MAXSTRLEN);
 			name[MAXSTRLEN] = 0;
 			match(ID); // ID is associated to a R-value or L-value variable
+			idx = symtab_lookup(name);
+			if (idx < 0) {
+				fprintf(stderr,
+					"erro semantico na linha %d: identificador '%s' nao declarado\n",
+					line, name);
+				lhs_type = 0;
+				newtype = 0;
+			} else {
+				lhs_type = symtab[idx].type;
+				newtype = lhs_type;
+			}
 			if (lookahead == ASGN) {
+				int rhs_type;
+				int merged;
+
 				// ID := E -> L-value
 				match(ASGN);
-				expr();
+				rhs_type = expr(TYPE_VOID);
+				merged = iscompat(lhs_type, rhs_type);
+				if (lhs_type && merged && merged != lhs_type) {
+					fprintf(stderr,
+						"erro semantico na linha %d: incompatibilidade de tipos em atribuicao\n",
+						line);
+					newtype = 0;
+				} else {
+					newtype = lhs_type ? lhs_type : rhs_type;
+				}
 				fprintf(objfile, "\tmovl %%eax, %s\n", name);
 			} else {
 				fprintf(objfile, "\tmovl %s, %%eax\n", name);
 			}
+			acctype = iscompat(acctype, newtype);
+			/*[[1]]*/
 			break;
+		}
 		case FLT:
 			fprintf(objfile, "\tmovl $%s, %%eax\n", lexeme);
 			match(FLT);
+			newtype = TYPE_FLT32;
+			acctype = iscompat(acctype, newtype);
 			break;
 		case UINT:
 			fprintf(objfile, "\tmovl $%s, %%eax\n", lexeme);
 			match(UINT);
+			newtype = TYPE_INT64;
+			acctype = iscompat(acctype, newtype);
 			break;
 		default:
 			match('(');
-			expr();
+			newtype = expr(acctype);
 			match(')');
+			acctype = iscompat(acctype, newtype);
+			break;
 	}
 
 	if (unary == '-') {
@@ -512,4 +620,6 @@ _F:
 		match(lookahead);
 		goto _T;
 	}
+
+	return acctype;
 }

@@ -1,6 +1,6 @@
 # MyPas
 
-Compilador Pascal da disciplina de **Compiladores**. Nesta etapa o foco é a análise léxica, o parser LL(1) da sintaxe (diagramas de Grogono) e o **início da geração de código** x86 (AT&T) para expressões, atribuição e controle (`IF` / `WHILE` / `REPEAT`).
+Compilador Pascal da disciplina de **Compiladores**. Nesta etapa o foco é a análise léxica, o parser LL(1) da sintaxe (diagramas de Grogono), o **início da geração de código** x86 (AT&T) para expressões, atribuição e controle (`IF` / `WHILE` / `REPEAT`), e a **verificação de tipos** em expressões (`expr` / `smpexpr`) com atributos herdados e sintetizados.
 
 O executável chama-se `mypas`. Os cabeçalhos ficam em `include/`.
 
@@ -39,18 +39,20 @@ fonte (arquivo ou stdin)          → targetfile
     → gettoken()                  lexer.c
     → lookahead / match()         parser.c
     → program()                   parser.c
+         ├─ type() / symtab_batch → tipo na tabela (códigos 1–6)
+         ├─ expr(inherited) / smpexpr(acctype) + iscompat
          ├─ labels IF/WHILE/REPEAT
          └─ movl / pushl / ops    → objfile (a.out ou argv[2])
-    → stderr (erro) ou silêncio se a sintaxe estiver ok
+    → stderr (erro sintático ou semântico) ou silêncio se ok
 ```
 
 | Arquivo | Papel |
 |---------|--------|
 | `main.c` | Abre `targetfile` / `objfile`, lê o 1º token e chama `program()` |
 | `lexer.c` / `include/lexer.h` | Tokens, `lexeme[]`, comentários `{...}`, contador `line`, `isNUM` |
-| `parser.c` / `include/parser.h` | Parser LL(1) MyPas + emissão de assembly |
+| `parser.c` / `include/parser.h` | Parser LL(1) MyPas + codegen + verificação de tipos (`iscompat`) |
 | `keywords.c` / `include/keywords.h` | Palavras-reservadas e `iskeyword()` |
-| `symtab.c` / `include/symtab.h` | Tabela de símbolos (`lookup` / `append`) — ainda pouco usada |
+| `symtab.c` / `include/symtab.h` | Tabela de símbolos (`lookup` / `append` / `batch` / `release`) + escopos |
 | `vmachine.c` / `include/vmachine.h` | Acumulador e pilha (ainda não linkados no Makefile) |
 | `include/tokens.h` | `ID`, `UINT`, `FLT`, `ASGN`, `LEQ`, `NEQ`, `GEQ` |
 
@@ -84,6 +86,20 @@ relop    → < | <= | <> | > | >= | =
 - Atribuição `:=` é associativa à direita (`x := y := 1` dentro de expressão).
 - Newline é espaço em branco (Pascal), não delimitador de sentença.
 - Comentários `{ ... }`. Dentro do comentário, `\{` e `\}` são literais.
+- `expr(inherited)` / `smpexpr(acctype)` devolvem o **tipo** da expressão; `iscompat` promove ou rejeita pares incompatíveis.
+
+### Convenção de tipos (`include/parser.h`)
+
+| Código | Significado | Origem típica no MyPas |
+|-------:|-------------|------------------------|
+| 1 | void | início / sem expectativa (`TYPE_VOID`) |
+| 2 | boolean | `BOOLEAN`; resultado de relacional |
+| 3 | int32 | reservado |
+| 4 | int64 | `INTEGER`; literal `UINT` |
+| 5 | flt32 | `REAL`; literal `FLT` |
+| 6 | flt64 | `DOUBLE` |
+
+`type()` devolve esses códigos (não o token `INTEGER`/`REAL`/…). `symtab_batch` grava o tipo na tabela; uso de `ID` faz `lookup` e entra no `iscompat`.
 
 Ainda **não** entram (constam nos diagramas, mas a aula ainda não chegou): `const`/`type`/`label`, `for`/`case`/`goto`/`with`, `not`/`or`/`true`/`false` como fator, arrays, records, etc.
 
@@ -103,11 +119,11 @@ Ainda **não** entram (constam nos diagramas, mas a aula ainda não chegou): `co
 ### Geração de código (etapa atual)
 
 - Expressões: resultado em `%eax`; operandos esquerdos via `pushl` / pilha.
-- Relacionais: `cmpl` + `setcc` → `0`/`1` em `%eax` (serve para o `jz` de `IF`/`WHILE`/`REPEAT`).
-- Atribuição: `movl %eax, var` após `expr`.
+- Relacionais: `cmpl` + `setcc` → `0`/`1` em `%eax` (serve para o `jz` de `IF`/`WHILE`/`REPEAT`); tipo sintetizado = boolean.
+- Atribuição: `movl %eax, var` após `expr`; checa compatibilidade LHS/RHS (o lub deve permanecer o tipo do LHS).
 - Controle: rótulos `.Ln` e saltos `jz` / `jmp` (`loopcount`).
 
-O assembly emitido ainda **não** é um programa linkável completo (faltam diretivas, seção de dados, `main`, etc.): é o esqueleto da aula.
+O assembly emitido ainda **não** é um programa linkável completo (faltam diretivas, seção de dados, `main`, etc.): é o esqueleto da aula. A migração para registradores **64-bit** (`%rax` / `%rsp`) está prevista, mas a emissão atual ainda usa o estilo 32-bit da aula.
 
 ---
 
@@ -122,6 +138,9 @@ Todas as mensagens vão para **stderr**, com o número da linha. O token visto �
 | `{` sem `}` até o EOF | `comentário não fechado na linha N` |
 | arquivo de entrada inexistente | `file ... not found. Exiting with error status.` |
 | não abre o arquivo de saída | `cannot open output file ...` |
+| identificador não declarado | `erro semantico na linha N: identificador '...' nao declarado` |
+| tipos incompatíveis em operação | `erro semantico na linha N: incompatibilidade de tipos (... vs ...)` |
+| tipos incompatíveis em `:=` | `erro semantico na linha N: incompatibilidade de tipos em atribuicao` |
 
 ```bash
 ./mypas test-pas.pas out.s
